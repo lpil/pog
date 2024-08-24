@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Add support for `sslmode` in connection strings.
+- Change SSL from `Bool` to `SslEnabled`, `SslDisabled` and `SslVerify` to match
+  against diverse CA certificates or not.
+
 ## v1.0.1 - 2024-11-26
 
 - Corrected a mistake in the `array` function type.
