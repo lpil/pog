@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Add support for `sslmode` in connection strings.
+- Change SSL from `Bool` to `SslEnabled`, `SslDisabled` and `SslVerify` to match
+  against diverse CA certificates or not.
+
 ## v1.1.0 - 2024-12-11
 
 - Added support for timeout in pool configuration as well as queries.
