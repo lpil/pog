@@ -26,15 +26,16 @@ coerce(Value) ->
 %% will not be handled correctly.
 default_ssl_options(Host, Ssl) ->
   case Ssl of
-    false -> [];
-    true -> [
+    ssl_disabled -> {false, []};
+    ssl_enabled -> {true, [{verify, verify_none}]};
+    ssl_verify -> {true, [
       {verify, verify_peer},
       {cacerts, public_key:cacerts_get()},
       {server_name_indication, binary_to_list(Host)},
       {customize_hostname_check, [
         {match_fun, public_key:pkix_verify_hostname_match_fun(https)}
       ]}
-    ]
+    ]}
   end.
 
 connect(Config) ->
@@ -56,13 +57,13 @@ connect(Config) ->
         ip_version = IpVersion,
         rows_as_map = RowsAsMap
     } = Config,
-    SslOptions = default_ssl_options(Host, Ssl),
+    {SslActivated, SslOptions} = default_ssl_options(Host, Ssl),
     Options1 = #{
         host => Host,
         port => Port,
         database => Database,
         user => User,
-        ssl => Ssl,
+        ssl => SslActivated,
         ssl_options => SslOptions,
         connection_parameters => ConnectionParameters,
         pool_size => PoolSize,
