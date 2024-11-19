@@ -60,12 +60,16 @@ pub type Config {
   )
 }
 
-/// The SSL target needed.
 pub type Ssl {
   /// Enable SSL connection, but don't check CA certificate.
-  SslEnabled
+  /// `SslEnabled` should always be prioritized upon `SslUnsafe`.
+  /// As it implies, that option is unsafe, so you should use this option only
+  /// if you know what you're doing. In case `pog` can not find the proper CA
+  /// certificate, take a look at the README to get some help to inject the CA
+  /// certificate in your OS.
+  SslUnsafe
   /// Enable SSL connection, and check CA certificate.
-  SslVerify
+  SslEnabled
   /// Disable SSL connection.
   SslDisabled
 }
@@ -262,6 +266,8 @@ fn extract_user_password(userinfo: String) {
 
 /// Expects `sslmode` to be `require`, `verify-ca`, `verify-full` or `disable`.
 /// If `sslmode` is set, but not one of those value, fails.
+/// If `sslmode` is `verify-ca` or `verify-full`, returns `SslEnabled`.
+/// If `sslmode` is `require`, returns `SslUnsafe`.
 /// If `sslmode` is unset, returns `SslDisabled`.
 fn extract_ssl_mode(query: option.Option(String)) {
   case query {
@@ -270,8 +276,8 @@ fn extract_ssl_mode(query: option.Option(String)) {
       use query <- result.then(uri.parse_query(query))
       use sslmode <- result.then(list.key_find(query, "sslmode"))
       case sslmode {
-        "require" -> Ok(SslEnabled)
-        "verify-ca" | "verify-full" -> Ok(SslVerify)
+        "require" -> Ok(SslUnsafe)
+        "verify-ca" | "verify-full" -> Ok(SslEnabled)
         "disable" -> Ok(SslDisabled)
         _ -> Error(Nil)
       }
