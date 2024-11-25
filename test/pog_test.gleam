@@ -1,5 +1,6 @@
 import exception
 import gleam/dynamic.{type Decoder}
+import gleam/erlang/atom
 import gleam/option.{None, Some}
 import gleeunit
 import gleeunit/should
@@ -7,6 +8,11 @@ import pog
 
 pub fn main() {
   gleeunit.main()
+}
+
+pub fn run_with_timeout(time: Int, next: fn() -> a) {
+  let assert Ok(timeout) = atom.from_string("timeout")
+  #(timeout, time, next)
 }
 
 pub fn url_config_everything_test() {
@@ -437,6 +443,46 @@ pub fn expected_return_type_test() {
       ]),
     ),
   )
+
+  pog.disconnect(db)
+}
+
+pub fn expected_ten_seconds_timeout_test() {
+  use <- run_with_timeout(20)
+  let db = start_default()
+
+  pog.query("select sub.ret from (select pg_sleep(10), 'OK' as ret) as sub")
+  |> pog.returning(dynamic.element(0, dynamic.string))
+  |> pog.execute(db)
+  |> should.equal(Error(pog.QueryTimeout))
+
+  pog.disconnect(db)
+}
+
+pub fn expected_ten_seconds_no_timeout_test() {
+  use <- run_with_timeout(20)
+  let db = start_default()
+
+  pog.query("select sub.ret from (select pg_sleep(10), 'OK' as ret) as sub")
+  |> pog.timeout(20_000)
+  |> pog.returning(dynamic.element(0, dynamic.string))
+  |> pog.execute(db)
+  |> should.equal(Ok(pog.Returned(1, ["Ok"])))
+
+  pog.disconnect(db)
+}
+
+pub fn expected_ten_seconds_no_default_timeout_test() {
+  use <- run_with_timeout(20)
+  let db =
+    default_config()
+    |> pog.default_timeout(20_000)
+    |> pog.connect
+
+  pog.query("select sub.ret from (select pg_sleep(10), 'OK' as ret) as sub")
+  |> pog.returning(dynamic.element(0, dynamic.string))
+  |> pog.execute(db)
+  |> should.equal(Ok(pog.Returned(1, ["Ok"])))
 
   pog.disconnect(db)
 }
