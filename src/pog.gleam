@@ -355,6 +355,8 @@ pub type QueryError {
   /// The rows returned by the database could not be decoded using the supplied
   /// dynamic decoder.
   UnexpectedResultType(DecodeErrors)
+  /// The query timed out.
+  QueryTimeout
   /// No connection was available to execute the query. This may be due to
   /// invalid connection details such as an invalid username or password.
   ConnectionUnavailable
@@ -396,6 +398,10 @@ pub fn returning(query: Query(t1), decoder: Decoder(t2)) -> Query(t2) {
 /// Push a new query parameter value for the query.
 pub fn parameter(query: Query(t1), parameter: Value) -> Query(t1) {
   Query(..query, parameters: [parameter, ..query.parameters])
+}
+
+pub fn timeout(query: Query(t1), timeout: Int) -> Query(t1) {
+  Query(..query, timeout: Some(timeout))
 }
 
 /// Run a query against a PostgreSQL database.

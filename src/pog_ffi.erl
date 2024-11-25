@@ -109,7 +109,8 @@ query(#pog_pool{name = Name, default_timeout = DefaultTimeout}, Sql, Arguments, 
       {some, QueryTimeout} -> QueryTimeout
     end,
     Options = #{pool => Name, pool_options => [{timeout, Timeout1}]},
-    case pgo:query(Sql, Arguments, Options) of
+    Res = pgo:query(Sql, Arguments, Options),
+    case Res of
         #{rows := Rows, num_rows := NumRows} ->
             {ok, {NumRows, Rows}};
 
@@ -139,4 +140,6 @@ convert_error(#{
     value := Value
 }) ->
     Got = list_to_binary(io_lib:format("~p", [Value])),
-    {unexpected_argument_type, Expected, Got}.
+    {unexpected_argument_type, Expected, Got};
+convert_error(closed) ->
+    query_timeout.
