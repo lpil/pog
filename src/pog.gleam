@@ -54,6 +54,9 @@ pub type Config {
     /// (default: False) By default, pgo will return a n-tuple, in the order of the query.
     /// By setting `rows_as_map` to `True`, the result will be `Dict`.
     rows_as_map: Bool,
+    /// (default: 5000): Default time to wait before the query is considered timeout.
+    /// Timeout can be edited per query.
+    default_timeout: Int,
   )
 }
 
@@ -161,6 +164,10 @@ pub fn rows_as_map(config: Config, rows_as_map: Bool) -> Config {
   Config(..config, rows_as_map:)
 }
 
+pub fn default_timeout(config: Config, default_timeout: Int) -> Config {
+  Config(..config, default_timeout:)
+}
+
 /// The internet protocol version to use.
 pub type IpVersion {
   /// Internet Protocol version 4 (IPv4)
@@ -188,6 +195,7 @@ pub fn default_config() -> Config {
     trace: False,
     ip_version: Ipv4,
     rows_as_map: False,
+    default_timeout: 5000,
   )
 }
 
@@ -329,6 +337,7 @@ fn run_query(
   a: Connection,
   b: String,
   c: List(Value),
+  timeout: Option(Int),
 ) -> Result(#(Int, List(Dynamic)), QueryError)
 
 pub type QueryError {
@@ -352,14 +361,24 @@ pub type QueryError {
 }
 
 pub opaque type Query(row_type) {
-  Query(sql: String, parameters: List(Value), row_decoder: Decoder(row_type))
+  Query(
+    sql: String,
+    parameters: List(Value),
+    row_decoder: Decoder(row_type),
+    timeout: option.Option(Int),
+  )
 }
 
 /// Create a new query to use with the `execute`, `returning`, and `parameter`
 /// functions.
 ///
 pub fn query(sql: String) -> Query(Nil) {
-  Query(sql:, parameters: [], row_decoder: fn(_) { Ok(Nil) })
+  Query(
+    sql:,
+    parameters: [],
+    row_decoder: fn(_) { Ok(Nil) },
+    timeout: option.None,
+  )
 }
 
 /// Set the decoder to use for the type of row returned by executing this
@@ -370,8 +389,8 @@ pub fn query(sql: String) -> Query(Nil) {
 /// against the database.
 ///
 pub fn returning(query: Query(t1), decoder: Decoder(t2)) -> Query(t2) {
-  let Query(sql:, parameters:, row_decoder: _) = query
-  Query(sql:, parameters:, row_decoder: decoder)
+  let Query(sql:, parameters:, row_decoder: _, timeout:) = query
+  Query(sql:, parameters:, row_decoder: decoder, timeout:)
 }
 
 /// Push a new query parameter value for the query.
@@ -390,7 +409,12 @@ pub fn execute(
   on pool: Connection,
 ) -> Result(Returned(t), QueryError) {
   let parameters = list.reverse(query.parameters)
-  use #(count, rows) <- result.then(run_query(pool, query.sql, parameters))
+  use #(count, rows) <- result.then(run_query(
+    pool,
+    query.sql,
+    parameters,
+    query.timeout,
+  ))
   use rows <- result.then(
     list.try_map(over: rows, with: query.row_decoder)
     |> result.map_error(UnexpectedResultType),
