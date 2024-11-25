@@ -451,7 +451,8 @@ pub fn expected_ten_seconds_timeout_test() {
   use <- run_with_timeout(20)
   let db = start_default()
 
-  pog.query("select sub.ret from (select pg_sleep(10), 'OK' as ret) as sub")
+  pog.query("select sub.ret from (select pg_sleep(0.5), 'OK' as ret) as sub")
+  |> pog.timeout(100)
   |> pog.returning(dynamic.element(0, dynamic.string))
   |> pog.execute(db)
   |> should.equal(Error(pog.QueryTimeout))
@@ -463,8 +464,8 @@ pub fn expected_ten_seconds_no_timeout_test() {
   use <- run_with_timeout(20)
   let db = start_default()
 
-  pog.query("select sub.ret from (select pg_sleep(10), 'OK' as ret) as sub")
-  |> pog.timeout(20_000)
+  pog.query("select sub.ret from (select pg_sleep(0.1), 'OK' as ret) as sub")
+  |> pog.timeout(1000)
   |> pog.returning(dynamic.element(0, dynamic.string))
   |> pog.execute(db)
   |> should.equal(Ok(pog.Returned(1, ["Ok"])))
@@ -476,10 +477,10 @@ pub fn expected_ten_seconds_no_default_timeout_test() {
   use <- run_with_timeout(20)
   let db =
     default_config()
-    |> pog.default_timeout(20_000)
+    |> pog.default_timeout(1000)
     |> pog.connect
 
-  pog.query("select sub.ret from (select pg_sleep(10), 'OK' as ret) as sub")
+  pog.query("select sub.ret from (select pg_sleep(0.1), 'OK' as ret) as sub")
   |> pog.returning(dynamic.element(0, dynamic.string))
   |> pog.execute(db)
   |> should.equal(Ok(pog.Returned(1, ["Ok"])))
