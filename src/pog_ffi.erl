@@ -1,8 +1,8 @@
 -module(pog_ffi).
 
--export([query/3, connect/1, disconnect/1, coerce/1, null/0, transaction/2]).
+-export([query/4, connect/1, disconnect/1, coerce/1, null/0, transaction/2]).
 
--record(pog_pool, {name, pid}).
+-record(pog_pool, {name, pid, default_timeout}).
 
 -include_lib("pog/include/pog_Config.hrl").
 -include_lib("pg_types/include/pg_types.hrl").
@@ -54,7 +54,8 @@ connect(Config) ->
         idle_interval = IdleInterval,
         trace = Trace,
         ip_version = IpVersion,
-        rows_as_map = RowsAsMap
+        rows_as_map = RowsAsMap,
+        default_timeout = DefaultTimeout
     } = Config,
     SslOptions = default_ssl_options(Host, Ssl),
     Options1 = #{
@@ -81,7 +82,7 @@ connect(Config) ->
         none -> Options1
     end,
     {ok, Pid} = pgo_pool:start_link(PoolName, Options2),
-    #pog_pool{name = PoolName, pid = Pid}.
+    #pog_pool{name = PoolName, pid = Pid, default_timeout = DefaultTimeout}.
 
 disconnect(#pog_pool{pid = Pid}) ->
     erlang:exit(Pid, normal),
@@ -102,8 +103,13 @@ transaction(#pog_pool{name = Name} = Conn, Callback) ->
     end.
 
 
-query(#pog_pool{name = Name}, Sql, Arguments) ->
-    case pgo:query(Sql, Arguments, #{pool => Name}) of
+query(#pog_pool{name = Name, default_timeout = DefaultTimeout}, Sql, Arguments, Timeout) ->
+    Timeout1 = case Timeout of
+      none -> DefaultTimeout;
+      {some, QueryTimeout} -> QueryTimeout
+    end,
+    Options = #{pool => Name, pool_options => [{timeout, Timeout1}]},
+    case pgo:query(Sql, Arguments, Options) of
         #{rows := Rows, num_rows := NumRows} ->
             {ok, {NumRows, Rows}};
 
