@@ -273,8 +273,10 @@ pub fn text(a: String) -> Value
 @external(erlang, "pog_ffi", "coerce")
 pub fn bytea(a: BitArray) -> Value
 
-@external(erlang, "pog_ffi", "coerce")
-pub fn array(a: List(a)) -> Value
+pub fn array(a: List(a), mapper: fn(a) -> Value) -> Value {
+  list.map(a, mapper)
+  |> coerce_value
+}
 
 pub fn timestamp(timestamp: Timestamp) -> Value {
   coerce_value(#(date(timestamp.date), time(timestamp.time)))
