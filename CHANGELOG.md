@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Add support for timeout in pool configuration as well as queries.
+
 ## v1.0.1 - 2024-11-26
 
 - Corrected a mistake in the `array` function type.
