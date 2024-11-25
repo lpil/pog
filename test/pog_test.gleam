@@ -355,9 +355,14 @@ pub fn bytea_test() {
 pub fn array_test() {
   let decoder = dynamic.list(dynamic.string)
   start_default()
-  |> assert_roundtrip(["black"], "text[]", pog.array, decoder)
-  |> assert_roundtrip(["gray"], "text[]", pog.array, decoder)
-  |> assert_roundtrip(["gray", "black"], "text[]", pog.array, decoder)
+  |> assert_roundtrip(["black"], "text[]", pog.array(_, pog.text), decoder)
+  |> assert_roundtrip(["gray"], "text[]", pog.array(_, pog.text), decoder)
+  |> assert_roundtrip(
+    ["gray", "black"],
+    "text[]",
+    pog.array(_, pog.text),
+    decoder,
+  )
   |> pog.disconnect
 }
 
