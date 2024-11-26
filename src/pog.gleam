@@ -273,8 +273,8 @@ pub fn text(a: String) -> Value
 @external(erlang, "pog_ffi", "coerce")
 pub fn bytea(a: BitArray) -> Value
 
-pub fn array(a: List(a), mapper: fn(a) -> Value) -> Value {
-  list.map(a, mapper)
+pub fn array(converter: fn(a) -> Value, values: List(a)) -> Value {
+  list.map(values, converter)
   |> coerce_value
 }
 

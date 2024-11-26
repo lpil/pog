@@ -1,8 +1,8 @@
 # Changelog
 
-## v1.0.1 - Unreleased
+## v1.0.1 - 2024-11-26
 
-- Fix `array` signature.
+- Corrected a mistake in the `array` function type.
 
 ## v1.0.0 - 2024-11-11
 
