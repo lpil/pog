@@ -95,6 +95,16 @@ When writing or reading a JSON, you can simply use
 `pog.text(json.to_string(my_json))` and `dynamic.string` to respectively write
 and read them!
 
+## Timeout
+
+By default, every pog query has a 5 seconds timeout, and every query taking more
+than 5 seconds will automatically be aborted. That behaviour can be changed
+through the usage of `default_timeout` or `timeout`. `default_timeout` should be
+used on `Config`, and defines the timeout that will be used for every query
+using that connection, while `timeout` handles timeout query by query. If you have
+one query taking more time than your default timeout to complete, you can override
+that behaviour specifically for that one.
+
 ## Rows as maps
 
 By default, `pgo` will return every selected value from your query as a tuple.
