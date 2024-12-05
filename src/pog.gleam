@@ -54,8 +54,8 @@ pub type Config {
     /// (default: False) By default, pgo will return a n-tuple, in the order of the query.
     /// By setting `rows_as_map` to `True`, the result will be `Dict`.
     rows_as_map: Bool,
-    /// (default: 5000): Default time to wait before the query is considered timeout.
-    /// Timeout can be edited per query.
+    /// (default: 5000): Default time in milliseconds to wait before the query
+    /// is considered timeout. Timeout can be edited per query.
     default_timeout: Int,
   )
 }
@@ -164,6 +164,9 @@ pub fn rows_as_map(config: Config, rows_as_map: Bool) -> Config {
   Config(..config, rows_as_map:)
 }
 
+/// By default, pog have a default value of 5000ms as timeout.
+/// By setting `default_timeout`, every queries will now use that timeout.
+/// `default_timeout` should be set as milliseconds.
 pub fn default_timeout(config: Config, default_timeout: Int) -> Config {
   Config(..config, default_timeout:)
 }
@@ -400,6 +403,8 @@ pub fn parameter(query: Query(t1), parameter: Value) -> Query(t1) {
   Query(..query, parameters: [parameter, ..query.parameters])
 }
 
+/// Use a custom timeout for the query. This timeout will take precedence over
+/// the default connection timeout.
 pub fn timeout(query: Query(t1), timeout: Int) -> Query(t1) {
   Query(..query, timeout: Some(timeout))
 }
