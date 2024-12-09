@@ -166,8 +166,8 @@ In Postgres, conventions used, including in connection URI are as follow:
 ### `pog` SSL usage
 
 In `pog`, setting up an SSL connection simply ask you to indicate the proper flag
-in `pog.Config`. The different options are `SslDisabled`, `SslUnsafe` &
-`SslEnabled`. Because of the nature of the 3 modes of SSL, and because talking
+in `pog.Config`. The different options are `SslDisabled`, `SslUnverified` &
+`SslVerified`. Because of the nature of the 3 modes of SSL, and because talking
 to your database should be highly secured to protect you against man-in-the-middle
 attacks, you should always try to use the most secured setting.
 
@@ -176,7 +176,7 @@ import pog
 
 pub fn connect() {
   pog.default_config()
-  |> pog.ssl(pog.SslSecured)
+  |> pog.ssl(pog.SslVerified)
   |> pog.connect
 }
 ```

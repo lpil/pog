@@ -36,7 +36,7 @@ it's properly secured, everyone will have an error, rejecting because the CA
 certificate can not be verified.
 
 To make sure your error comes from an CA certificate issue, it's recommended to
-first test your connection in `pog` with `ssl: pog.SslUnsafe`. Because of the
+first test your connection in `pog` with `ssl: pog.SslUnverified`. Because of the
 nature of the setting, if the only error comes from SSL, it should work directly.
 If it does not work, your problem comes from something else.
 

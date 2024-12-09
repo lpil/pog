@@ -61,16 +61,20 @@ pub type Config {
 }
 
 pub type Ssl {
+  /// Enable SSL connection, and check CA certificate. It is the most secured
+  /// option to use SSL and should be always used by default.
+  /// Never ignore CA certificate checking _unless you know exactly what you are
+  /// doing_.
+  SslVerified
   /// Enable SSL connection, but don't check CA certificate.
-  /// `SslEnabled` should always be prioritized upon `SslUnsafe`.
-  /// As it implies, that option is unsafe, so you should use this option only
-  /// if you know what you're doing. In case `pog` can not find the proper CA
-  /// certificate, take a look at the README to get some help to inject the CA
-  /// certificate in your OS.
-  SslUnsafe
-  /// Enable SSL connection, and check CA certificate.
-  SslEnabled
-  /// Disable SSL connection.
+  /// `SslVerified` should always be prioritized upon `SslUnverified`.
+  /// As it implies, that option enables SSL, but as it is unverified, the
+  /// connection can be unsafe. _Use this option only if you know what you're
+  /// doing._ In case `pog` can not find the proper CA certificate, take a look
+  /// at the README to get some help to inject the CA certificate in your OS.
+  SslUnverified
+  /// Disable SSL connection completely. Using this option will let the
+  /// connection unsecured, and should be avoided in production environment.
   SslDisabled
 }
 
@@ -256,7 +260,9 @@ pub fn url_config(database_url: String) -> Result(Config, Nil) {
 }
 
 /// Expects `userinfo` as `"username"` or `"username:password"`. Fails otherwise.
-fn extract_user_password(userinfo: String) {
+fn extract_user_password(
+  userinfo: String,
+) -> Result(#(String, Option(String)), Nil) {
   case string.split(userinfo, ":") {
     [user] -> Ok(#(user, None))
     [user, password] -> Ok(#(user, Some(password)))
@@ -266,18 +272,18 @@ fn extract_user_password(userinfo: String) {
 
 /// Expects `sslmode` to be `require`, `verify-ca`, `verify-full` or `disable`.
 /// If `sslmode` is set, but not one of those value, fails.
-/// If `sslmode` is `verify-ca` or `verify-full`, returns `SslEnabled`.
-/// If `sslmode` is `require`, returns `SslUnsafe`.
+/// If `sslmode` is `verify-ca` or `verify-full`, returns `SslVerified`.
+/// If `sslmode` is `require`, returns `SslUnverified`.
 /// If `sslmode` is unset, returns `SslDisabled`.
-fn extract_ssl_mode(query: option.Option(String)) {
+fn extract_ssl_mode(query: option.Option(String)) -> Result(Ssl, Nil) {
   case query {
     option.None -> Ok(SslDisabled)
     option.Some(query) -> {
       use query <- result.then(uri.parse_query(query))
       use sslmode <- result.then(list.key_find(query, "sslmode"))
       case sslmode {
-        "require" -> Ok(SslUnsafe)
-        "verify-ca" | "verify-full" -> Ok(SslEnabled)
+        "require" -> Ok(SslUnverified)
+        "verify-ca" | "verify-full" -> Ok(SslVerified)
         "disable" -> Ok(SslDisabled)
         _ -> Error(Nil)
       }
