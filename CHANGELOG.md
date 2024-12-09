@@ -3,7 +3,7 @@
 ## Unreleased
 
 - Add support for `sslmode` in connection strings.
-- Change SSL from `Bool` to `SslEnabled`, `SslDisabled` and `SslVerify` to match
+- Change SSL from `Bool` to `SslVerify`, `SslUnverify` and `SslDisabled` to match
   against diverse CA certificates or not.
 
 ## v1.1.0 - 2024-12-11
