@@ -166,7 +166,7 @@ pub fn rows_as_map(config: Config, rows_as_map: Bool) -> Config {
 
 /// By default, pog have a default value of 5000ms as timeout.
 /// By setting `default_timeout`, every queries will now use that timeout.
-/// `default_timeout` should be set as milliseconds.
+/// The timeout is given in milliseconds.
 pub fn default_timeout(config: Config, default_timeout: Int) -> Config {
   Config(..config, default_timeout:)
 }
@@ -405,6 +405,7 @@ pub fn parameter(query: Query(t1), parameter: Value) -> Query(t1) {
 
 /// Use a custom timeout for the query. This timeout will take precedence over
 /// the default connection timeout.
+/// The timeout is given in milliseconds.
 pub fn timeout(query: Query(t1), timeout: Int) -> Query(t1) {
   Query(..query, timeout: Some(timeout))
 }

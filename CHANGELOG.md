@@ -1,8 +1,8 @@
 # Changelog
 
-## Unreleased
+## v1.1.0 - 2024-12-11
 
-- Add support for timeout in pool configuration as well as queries.
+- Added support for timeout in pool configuration as well as queries.
 
 ## v1.0.1 - 2024-11-26
 
