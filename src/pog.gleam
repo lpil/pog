@@ -26,8 +26,8 @@ pub type Config {
     user: String,
     /// Password for the user.
     password: Option(String),
-    /// (default: False): Whether to use SSL or not.
-    ssl: Bool,
+    /// (default: SslDisabled): Whether to use SSL or not.
+    ssl: Ssl,
     /// (default: []): List of 2-tuples, where key and value must be binary
     /// strings. You can include any Postgres connection parameter here, such as
     /// `#("application_name", "myappname")` and `#("timezone", "GMT")`.
@@ -58,6 +58,24 @@ pub type Config {
     /// is considered timeout. Timeout can be edited per query.
     default_timeout: Int,
   )
+}
+
+pub type Ssl {
+  /// Enable SSL connection, and check CA certificate. It is the most secured
+  /// option to use SSL and should be always used by default.
+  /// Never ignore CA certificate checking _unless you know exactly what you are
+  /// doing_.
+  SslVerified
+  /// Enable SSL connection, but don't check CA certificate.
+  /// `SslVerified` should always be prioritized upon `SslUnverified`.
+  /// As it implies, that option enables SSL, but as it is unverified, the
+  /// connection can be unsafe. _Use this option only if you know what you're
+  /// doing._ In case `pog` can not find the proper CA certificate, take a look
+  /// at the README to get some help to inject the CA certificate in your OS.
+  SslUnverified
+  /// Disable SSL connection completely. Using this option will let the
+  /// connection unsecured, and should be avoided in production environment.
+  SslDisabled
 }
 
 /// Database server hostname.
@@ -92,7 +110,7 @@ pub fn password(config: Config, password: Option(String)) -> Config {
 /// Whether to use SSL or not.
 ///
 /// (default: False)
-pub fn ssl(config: Config, ssl: Bool) -> Config {
+pub fn ssl(config: Config, ssl: Ssl) -> Config {
   Config(..config, ssl:)
 }
 
@@ -189,7 +207,7 @@ pub fn default_config() -> Config {
     database: "postgres",
     user: "postgres",
     password: None,
-    ssl: False,
+    ssl: SslDisabled,
     connection_parameters: [],
     pool_size: 10,
     queue_target: 50,
@@ -205,27 +223,25 @@ pub fn default_config() -> Config {
 /// Parse a database url into configuration that can be used to start a pool.
 pub fn url_config(database_url: String) -> Result(Config, Nil) {
   use uri <- result.then(uri.parse(database_url))
-  use #(userinfo, host, path, db_port) <- result.then(case uri {
+  use #(userinfo, host, path, db_port, query) <- result.then(case uri {
     Uri(
       scheme: Some(scheme),
       userinfo: Some(userinfo),
       host: Some(host),
       port: Some(db_port),
       path: path,
+      query: query,
       ..,
     ) -> {
       case scheme {
-        "postgres" | "postgresql" -> Ok(#(userinfo, host, path, db_port))
+        "postgres" | "postgresql" -> Ok(#(userinfo, host, path, db_port, query))
         _ -> Error(Nil)
       }
     }
     _ -> Error(Nil)
   })
-  use #(user, password) <- result.then(case string.split(userinfo, ":") {
-    [user] -> Ok(#(user, None))
-    [user, password] -> Ok(#(user, Some(password)))
-    _ -> Error(Nil)
-  })
+  use #(user, password) <- result.then(extract_user_password(userinfo))
+  use ssl <- result.then(extract_ssl_mode(query))
   case string.split(path, "/") {
     ["", database] ->
       Ok(
@@ -236,9 +252,42 @@ pub fn url_config(database_url: String) -> Result(Config, Nil) {
           database: database,
           user: user,
           password: password,
+          ssl: ssl,
         ),
       )
     _ -> Error(Nil)
+  }
+}
+
+/// Expects `userinfo` as `"username"` or `"username:password"`. Fails otherwise.
+fn extract_user_password(
+  userinfo: String,
+) -> Result(#(String, Option(String)), Nil) {
+  case string.split(userinfo, ":") {
+    [user] -> Ok(#(user, None))
+    [user, password] -> Ok(#(user, Some(password)))
+    _ -> Error(Nil)
+  }
+}
+
+/// Expects `sslmode` to be `require`, `verify-ca`, `verify-full` or `disable`.
+/// If `sslmode` is set, but not one of those value, fails.
+/// If `sslmode` is `verify-ca` or `verify-full`, returns `SslVerified`.
+/// If `sslmode` is `require`, returns `SslUnverified`.
+/// If `sslmode` is unset, returns `SslDisabled`.
+fn extract_ssl_mode(query: option.Option(String)) -> Result(Ssl, Nil) {
+  case query {
+    option.None -> Ok(SslDisabled)
+    option.Some(query) -> {
+      use query <- result.then(uri.parse_query(query))
+      use sslmode <- result.then(list.key_find(query, "sslmode"))
+      case sslmode {
+        "require" -> Ok(SslUnverified)
+        "verify-ca" | "verify-full" -> Ok(SslVerified)
+        "disable" -> Ok(SslDisabled)
+        _ -> Error(Nil)
+      }
+    }
   }
 }
 

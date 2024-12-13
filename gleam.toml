@@ -10,6 +10,11 @@ links = [
   { title = "Sponsor", href = "https://github.com/sponsors/lpil" },
 ]
 
+[documentation]
+pages = [
+  { title = "Solving SSL issues", path = "docs/solving-ssl-issues.html", source = "docs/solving-ssl-issues.md" },
+]
+
 [dependencies]
 gleam_stdlib = ">= 0.20.0 and < 2.0.0"
 pgo = ">= 0.12.0 and < 2.0.0"
