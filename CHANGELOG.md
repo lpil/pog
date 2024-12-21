@@ -1,10 +1,10 @@
 # Changelog
 
-## Unreleased
+## v2.0.0 - 2024-12-21
 
 - Add support for `sslmode` in connection strings.
-- Change SSL from `Bool` to `SslVerify`, `SslUnverify` and `SslDisabled` to match
-  against diverse CA certificates or not.
+- Change SSL from `Bool` to `SslVerified`, `SslUnverified` and `SslDisabled` to
+  match against diverse CA certificates or not.
 
 ## v1.1.0 - 2024-12-11
 
