@@ -6,7 +6,7 @@ A PostgreSQL database client for Gleam, based on [PGO][erlang-pgo].
 
 ```gleam
 import pog
-import gleam/dynamic
+import gleam/dynamic/decode
 import gleeunit/should
 
 pub fn main() {
@@ -29,12 +29,13 @@ pub fn main() {
     id = $1"
 
   // This is the decoder for the value returned by the query
-  let row_decoder = dynamic.tuple4(
-    dynamic.string,
-    dynamic.int,
-    dynamic.string,
-    dynamic.list(dynamic.string),
-  )
+  let row_decoder = {
+    use name <- decode.field(0, decode.string)
+    use age <- decode.field(1, decode.int)
+    use colour <- decode.field(2, decode.string)
+    use friends <- decode.field(3, decode.list(decode.string))
+    decode.success(#(name, age, colour, friends))
+  }
 
   // Run the query against the PostgreSQL database
   // The int `1` is given as a parameter
@@ -92,7 +93,7 @@ pub fn read_connection_uri() -> Result(pog.Connection, Nil) {
 In Postgres, you can define a type `json` or `jsonb`. Such a type can be query
 in SQL, but Postgres returns it a simple string, and accepts it as a simple string!
 When writing or reading a JSON, you can simply use
-`pog.text(json.to_string(my_json))` and `dynamic.string` to respectively write
+`pog.text(json.to_string(my_json))` and `decode.string` to respectively write
 and read them!
 
 ## Timeout
