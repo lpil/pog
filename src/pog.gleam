@@ -4,7 +4,8 @@
 
 // TODO: add time and timestamp with zone once pgo supports them
 
-import gleam/dynamic.{type DecodeErrors, type Decoder, type Dynamic}
+import gleam/dynamic.{type DecodeErrors, type Dynamic}
+import gleam/dynamic/decode.{type Decoder}
 import gleam/float
 import gleam/int
 import gleam/list
@@ -430,7 +431,7 @@ pub fn query(sql: String) -> Query(Nil) {
   Query(
     sql:,
     parameters: [],
-    row_decoder: fn(_) { Ok(Nil) },
+    row_decoder: decode.success(Nil),
     timeout: option.None,
   )
 }
@@ -461,10 +462,6 @@ pub fn timeout(query: Query(t1), timeout: Int) -> Query(t1) {
 
 /// Run a query against a PostgreSQL database.
 ///
-/// The provided dynamic decoder is used to decode the rows returned by
-/// PostgreSQL. If you are not interested in any returned rows you may want to
-/// use the `dynamic.dynamic` decoder.
-///
 pub fn execute(
   query query: Query(t),
   on pool: Connection,
@@ -477,7 +474,7 @@ pub fn execute(
     query.timeout,
   ))
   use rows <- result.then(
-    list.try_map(over: rows, with: query.row_decoder)
+    list.try_map(over: rows, with: decode.run(_, query.row_decoder))
     |> result.map_error(UnexpectedResultType),
   )
   Ok(Returned(count, rows))
@@ -756,47 +753,41 @@ pub fn error_code_name(error_code: String) -> Result(String, Nil) {
   }
 }
 
-pub fn decode_timestamp(
-  value: dynamic.Dynamic,
-) -> Result(Timestamp, DecodeErrors) {
-  dynamic.decode2(
-    Timestamp,
-    dynamic.element(0, decode_date),
-    dynamic.element(1, decode_time),
-  )(value)
+pub fn timestamp_decoder() -> decode.Decoder(Timestamp) {
+  use date <- decode.field(0, date_decoder())
+  use time <- decode.field(1, time_decoder())
+  decode.success(Timestamp(date, time))
 }
 
-pub fn decode_date(value: dynamic.Dynamic) -> Result(Date, DecodeErrors) {
-  dynamic.decode3(
-    Date,
-    dynamic.element(0, dynamic.int),
-    dynamic.element(1, dynamic.int),
-    dynamic.element(2, dynamic.int),
-  )(value)
+pub fn date_decoder() -> decode.Decoder(Date) {
+  use year <- decode.field(0, decode.int)
+  use month <- decode.field(1, decode.int)
+  use day <- decode.field(2, decode.int)
+  decode.success(Date(year:, month:, day:))
 }
 
-pub fn decode_time(value: dynamic.Dynamic) -> Result(Time, DecodeErrors) {
-  case dynamic.tuple3(dynamic.int, dynamic.int, decode_seconds)(value) {
-    Error(e) -> Error(e)
-    Ok(#(hours, minutes, #(seconds, microseconds))) ->
-      Ok(Time(hours:, minutes:, seconds:, microseconds:))
+pub fn time_decoder() -> decode.Decoder(Time) {
+  use hours <- decode.field(0, decode.int)
+  use minutes <- decode.field(1, decode.int)
+  use #(seconds, microseconds) <- decode.field(2, seconds_decoder())
+  decode.success(Time(hours:, minutes:, seconds:, microseconds:))
+}
+
+fn seconds_decoder() -> decode.Decoder(#(Int, Int)) {
+  let int = {
+    decode.int
+    |> decode.map(fn(i) { #(i, 0) })
   }
-}
-
-fn decode_seconds(value: dynamic.Dynamic) -> Result(#(Int, Int), DecodeErrors) {
-  case dynamic.int(value) {
-    Ok(i) -> Ok(#(i, 0))
-    Error(_) ->
-      case dynamic.float(value) {
-        Error(e) -> Error(e)
-        Ok(i) -> {
-          let floored = float.floor(i)
-          let seconds = float.round(floored)
-          let microseconds = float.round({ i -. floored } *. 1_000_000.0)
-          Ok(#(seconds, microseconds))
-        }
-      }
+  let float = {
+    decode.float
+    |> decode.map(fn(f) {
+      let floored = float.floor(f)
+      let seconds = float.round(floored)
+      let microseconds = float.round({ f -. floored } *. 1_000_000.0)
+      #(seconds, microseconds)
+    })
   }
+  decode.one_of(int, [float])
 }
 
 pub type Date {

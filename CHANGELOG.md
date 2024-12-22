@@ -1,5 +1,11 @@
 # Changelog
 
+## v3.0.0 - 2024-12-22
+
+- Updated for `gleam_stdlib` v0.50.0.
+- The `decode_*` functions have been replaced with `*_decoder` functions.
+- `gleam/dynamic/decode.Decoder` is now used for decoding.
+
 ## v2.0.0 - 2024-12-21
 
 - Add support for `sslmode` in connection strings.
