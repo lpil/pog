@@ -1,5 +1,4 @@
 import exception
-import gleam/dynamic
 import gleam/dynamic/decode.{type Decoder}
 import gleam/erlang/atom
 import gleam/option.{None, Some}
@@ -445,7 +444,7 @@ pub fn expected_return_type_test() {
   |> should.equal(
     Error(
       pog.UnexpectedResultType([
-        dynamic.DecodeError(expected: "String", found: "Int", path: ["0"]),
+        decode.DecodeError(expected: "String", found: "Int", path: ["0"]),
       ]),
     ),
   )

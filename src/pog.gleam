@@ -4,7 +4,7 @@
 
 // TODO: add time and timestamp with zone once pgo supports them
 
-import gleam/dynamic.{type DecodeErrors, type Dynamic}
+import gleam/dynamic.{type Dynamic}
 import gleam/dynamic/decode.{type Decoder}
 import gleam/float
 import gleam/int
@@ -407,7 +407,7 @@ pub type QueryError {
   UnexpectedArgumentType(expected: String, got: String)
   /// The rows returned by the database could not be decoded using the supplied
   /// dynamic decoder.
-  UnexpectedResultType(DecodeErrors)
+  UnexpectedResultType(List(decode.DecodeError))
   /// The query timed out.
   QueryTimeout
   /// No connection was available to execute the query. This may be due to
