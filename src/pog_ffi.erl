@@ -27,8 +27,8 @@ coerce(Value) ->
 default_ssl_options(Host, Ssl) ->
   case Ssl of
     ssl_disabled -> {false, []};
-    ssl_unsafe -> {true, [{verify, verify_none}]};
-    ssl_enabled -> {true, [
+    ssl_unverified -> {true, [{verify, verify_none}]};
+    ssl_verified -> {true, [
       {verify, verify_peer},
       {cacerts, public_key:cacerts_get()},
       {server_name_indication, binary_to_list(Host)},

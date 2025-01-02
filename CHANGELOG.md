@@ -1,5 +1,9 @@
 # Changelog
 
+## v3.1.1 - 2025-01-02
+
+- Fixed a bug where configuring SSL would crash.
+
 ## v3.1.0 - 2024-12-22
 
 - Updated for `gleam_stdlib` v0.51.0.
