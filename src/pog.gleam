@@ -224,6 +224,10 @@ pub fn default_config() -> Config {
 /// Parse a database url into configuration that can be used to start a pool.
 pub fn url_config(database_url: String) -> Result(Config, Nil) {
   use uri <- result.then(uri.parse(database_url))
+  let uri = case uri.port {
+    Some(_) -> uri
+    None -> Uri(..uri, port: Some(default_config().port))
+  }
   use #(userinfo, host, path, db_port, query) <- result.then(case uri {
     Uri(
       scheme: Some(scheme),

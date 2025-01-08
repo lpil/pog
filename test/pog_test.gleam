@@ -57,6 +57,18 @@ pub fn url_config_no_password_test() {
   |> should.equal(Ok(expected))
 }
 
+pub fn url_config_no_port_test() {
+  let expected =
+    pog.default_config()
+    |> pog.host("db.test")
+    |> pog.port(5432)
+    |> pog.database("my_db")
+    |> pog.user("u")
+    |> pog.password(None)
+  pog.url_config("postgres://u@db.test/my_db")
+  |> should.equal(Ok(expected))
+}
+
 pub fn url_config_path_slash_test() {
   pog.url_config("postgres://u:p@db.test:1234/my_db/foo")
   |> should.equal(Error(Nil))
