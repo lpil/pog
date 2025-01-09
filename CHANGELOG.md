@@ -1,5 +1,9 @@
 # Changelog
 
+## v3.1.2 - 2025-01-09
+
+- The `url_config` function now defaults to port (5432) when port is not specified.
+
 ## v3.1.1 - 2025-01-02
 
 - Fixed a bug where configuring SSL would crash.

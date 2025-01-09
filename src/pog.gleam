@@ -14,6 +14,9 @@ import gleam/result
 import gleam/string
 import gleam/uri.{Uri}
 
+/// The port that will be used when none is specified.
+const default_port: Int = 5432
+
 /// The configuration for a pool of connections.
 pub type Config {
   Config(
@@ -204,7 +207,7 @@ pub type IpVersion {
 pub fn default_config() -> Config {
   Config(
     host: "127.0.0.1",
-    port: 5432,
+    port: default_port,
     database: "postgres",
     user: "postgres",
     password: None,
@@ -226,7 +229,7 @@ pub fn url_config(database_url: String) -> Result(Config, Nil) {
   use uri <- result.then(uri.parse(database_url))
   let uri = case uri.port {
     Some(_) -> uri
-    None -> Uri(..uri, port: Some(default_config().port))
+    None -> Uri(..uri, port: Some(default_port))
   }
   use #(userinfo, host, path, db_port, query) <- result.then(case uri {
     Uri(
