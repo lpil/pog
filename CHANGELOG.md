@@ -1,6 +1,6 @@
 # Changelog
 
-## v3.1.2 - 2025-01-09
+## v3.2.0 - 2025-01-16
 
 - The `url_config` function now defaults to port (5432) when port is not specified.
 
