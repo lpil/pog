@@ -45,6 +45,11 @@ default_ssl_options(Host, Ssl, SslOptions) ->
       {true, BaseOptions ++ configurable_ssl_options(Host, SslOptions)}
   end.
 
+%% This function can be extended with more functions with for example
+%% alpn_preferred_protocols which will turn the function into:
+%% configurable_ssl_options(Host, SslOptions) ->
+%%   sni_options(Host, SslOptions) ++
+%%   alpn_options(SslOptions)
 configurable_ssl_options(Host, SslOptions) -> sni_options(Host, SslOptions).
 
 sni_options(Host, SslOptions) when SslOptions#ssl_options.sni_enabled -> 
