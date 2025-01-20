@@ -32,7 +32,10 @@ pub type Config {
     password: Option(String),
     /// (default: SslDisabled): Whether to use SSL or not.
     ssl: Ssl,
-    /// - information to be added here
+    /// (default: SslOptions(sni_enabled: True)): Additional SSL configuration options.
+    /// Used to fine-tune SSL connection behavior, such as SNI (Server Name Indication)
+    /// which is important for proper certificate verification when connecting to
+    /// databases with virtual hosting or multi-domain certificates.
     ssl_options: SslOptions,
     /// (default: []): List of 2-tuples, where key and value must be binary
     /// strings. You can include any Postgres connection parameter here, such as
