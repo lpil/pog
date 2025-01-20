@@ -182,6 +182,22 @@ pub fn connect() {
 }
 ```
 
+### SSL Options
+`pog` also provides additional SSL configuration options through SslOptions. Currently, you can configure:
+- `sni_enabled`: Enable or disable Server Name Indication (SNI). By default, this is set to True and uses the connection hostname.
+```gleam
+import pog
+
+pub fn connect() {
+  pog.default_config()
+  |> pog.ssl(pog.SslVerified)
+  |> pog.ssl_options(pog.SslOptions(sni_enabled: True))
+  |> pog.connect
+}
+```
+When SNI is enabled, it helps ensure proper SSL certificate verification by sending the server name during the SSL handshake. This is particularly important when connecting to databases that use virtual hosting or when the database certificate includes multiple domain names.
+The default configuration (sni_enabled: True) is recommended for most use cases as it provides the most secure and reliable SSL connection setup.
+
 ### Need some help?
 
 You tried to setup a secured connection, but it does not work? Your container

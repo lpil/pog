@@ -5,6 +5,7 @@
 -record(pog_pool, {name, pid, default_timeout}).
 
 -include_lib("pog/include/pog_Config.hrl").
+-include_lib("pog/include/pog_SslOptions.hrl").
 -include_lib("pg_types/include/pg_types.hrl").
 
 null() ->
@@ -20,23 +21,35 @@ coerce(Value) ->
 %% connection to Postgres uses a TCP connection that get upgraded to TLS, and
 %% the TLS socket is sent as is, meaning the Hostname is lost when ssl module
 %% get the socket. server_name_indication overrides that behaviour and send
-%% the correct Hostname to the ssl module.
+%% the correct Hostname to the ssl module. However, there may be old versions
+%% that do not support server name indication and therefore it's made
+%% configurable. Using SslOptions in a manner that will be extendable for 
+%% future options to be added with the functions below.
 %% `customize_hostname_check` should be set to with the verify hostname match
 %% with HTTPS, because otherwise wildcards certificaties (i.e. *.example.com)
 %% will not be handled correctly.
-default_ssl_options(Host, Ssl) ->
+default_ssl_options(Host, Ssl, SslOptions) ->
   case Ssl of
     ssl_disabled -> {false, []};
-    ssl_unverified -> {true, [{verify, verify_none}]};
-    ssl_verified -> {true, [
-      {verify, verify_peer},
-      {cacerts, public_key:cacerts_get()},
-      {server_name_indication, binary_to_list(Host)},
-      {customize_hostname_check, [
-        {match_fun, public_key:pkix_verify_hostname_match_fun(https)}
-      ]}
-    ]}
+    ssl_unverified -> {true, [
+      {verify, verify_none}
+    ] ++ configurable_ssl_options(Host, SslOptions)};
+    ssl_verified -> 
+      BaseOptions = [
+        {verify, verify_peer},
+        {cacerts, public_key:cacerts_get()},
+        {customize_hostname_check, [
+          {match_fun, public_key:pkix_verify_hostname_match_fun(https)}
+        ]}
+      ],
+      {true, BaseOptions ++ configurable_ssl_options(Host, SslOptions)}
   end.
+
+configurable_ssl_options(Host, SslOptions) -> sni_options(Host, SslOptions).
+
+sni_options(Host, SslOptions) when SslOptions#ssl_options.sni_enabled -> 
+    [{server_name_indication, binary_to_list(Host)}];
+sni_options(_Host, _SslOptions) -> [].
 
 connect(Config) ->
     Id = integer_to_list(erlang:unique_integer([positive])),
@@ -48,6 +61,7 @@ connect(Config) ->
         user = User,
         password = Password,
         ssl = Ssl,
+        ssl_options = SslOptions,
         connection_parameters = ConnectionParameters,
         pool_size = PoolSize,
         queue_target = QueueTarget,
@@ -58,14 +72,14 @@ connect(Config) ->
         rows_as_map = RowsAsMap,
         default_timeout = DefaultTimeout
     } = Config,
-    {SslActivated, SslOptions} = default_ssl_options(Host, Ssl),
+    {SslActivated, ReturnedSslOptions} = default_ssl_options(Host, Ssl, SslOptions),
     Options1 = #{
         host => Host,
         port => Port,
         database => Database,
         user => User,
         ssl => SslActivated,
-        ssl_options => SslOptions,
+        ssl_options => ReturnedSslOptions,
         connection_parameters => ConnectionParameters,
         pool_size => PoolSize,
         queue_target => QueueTarget,

@@ -32,6 +32,8 @@ pub type Config {
     password: Option(String),
     /// (default: SslDisabled): Whether to use SSL or not.
     ssl: Ssl,
+    /// - information to be added here
+    ssl_options: SslOptions,
     /// (default: []): List of 2-tuples, where key and value must be binary
     /// strings. You can include any Postgres connection parameter here, such as
     /// `#("application_name", "myappname")` and `#("timezone", "GMT")`.
@@ -82,6 +84,19 @@ pub type Ssl {
   SslDisabled
 }
 
+pub type SslOptions {
+    /// Additional SSL configuration options for fine-tuning the SSL connection.
+    /// Currently supports Server Name Indication (SNI) configuration:
+    /// - `sni_enabled`: When set to `True` (default), enables SNI using the connection
+    /// hostname. SNI helps ensure proper SSL certificate verification by sending
+    /// the server name during the SSL handshake. This is particularly important
+    /// when connecting to databases that use virtual hosting or when the database
+    /// certificate includes multiple domain names.
+    SslOptions(
+        sni_enabled: Bool
+    )
+}
+
 /// Database server hostname.
 ///
 /// (default: 127.0.0.1)
@@ -116,6 +131,13 @@ pub fn password(config: Config, password: Option(String)) -> Config {
 /// (default: False)
 pub fn ssl(config: Config, ssl: Ssl) -> Config {
   Config(..config, ssl:)
+}
+
+/// Ssl options you'd like to change
+///
+/// (default: SslOptions(sni_enabled: True))
+pub fn ssl_options(config: Config, ssl_options: SslOptions) -> Config {
+    Config(..config, ssl_options:)
 }
 
 /// Any Postgres connection parameter here, such as
@@ -212,6 +234,7 @@ pub fn default_config() -> Config {
     user: "postgres",
     password: None,
     ssl: SslDisabled,
+    ssl_options: SslOptions(sni_enabled: True),
     connection_parameters: [],
     pool_size: 10,
     queue_target: 50,
