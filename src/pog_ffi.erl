@@ -5,7 +5,6 @@
 -record(pog_pool, {name, pid, default_timeout}).
 
 -include_lib("pog/include/pog_Config.hrl").
--include_lib("pog/include/pog_SslOptions.hrl").
 -include_lib("pg_types/include/pg_types.hrl").
 
 null() ->
@@ -21,40 +20,42 @@ coerce(Value) ->
 %% connection to Postgres uses a TCP connection that get upgraded to TLS, and
 %% the TLS socket is sent as is, meaning the Hostname is lost when ssl module
 %% get the socket. server_name_indication overrides that behaviour and send
-%% the correct Hostname to the ssl module. However, there may be old versions
-%% that do not support server name indication and therefore it's made
-%% configurable. Using SslOptions in a manner that will be extendable for 
-%% future options to be added with the functions below.
+%% the correct Hostname to the ssl module.
 %% `customize_hostname_check` should be set to with the verify hostname match
 %% with HTTPS, because otherwise wildcards certificaties (i.e. *.example.com)
 %% will not be handled correctly.
-default_ssl_options(Host, Ssl, SslOptions) ->
+default_ssl_options(Host, Ssl) ->
   case Ssl of
-    ssl_disabled -> {false, []};
-    ssl_unverified -> {true, [
-      {verify, verify_none}
-    ] ++ configurable_ssl_options(Host, SslOptions)};
-    ssl_verified -> 
-      BaseOptions = [
-        {verify, verify_peer},
-        {cacerts, public_key:cacerts_get()},
-        {customize_hostname_check, [
-          {match_fun, public_key:pkix_verify_hostname_match_fun(https)}
-        ]}
-      ],
-      {true, BaseOptions ++ configurable_ssl_options(Host, SslOptions)}
+    {ssl_disabled} -> {false, []};
+    {ssl_unverified, SniEnabled} -> {true, get_unverified_options(Host, SniEnabled)};
+    {ssl_verified, SniEnabled} -> {true, get_verified_options(Host, SniEnabled)}
   end.
 
-%% This function can be extended with more functions with for example
-%% alpn_preferred_protocols which will turn the function into:
-%% configurable_ssl_options(Host, SslOptions) ->
-%%   sni_options(Host, SslOptions) ++
-%%   alpn_options(SslOptions)
-configurable_ssl_options(Host, SslOptions) -> sni_options(Host, SslOptions).
+%% Options for unverified SSL connections
+get_unverified_options(Host, SniEnabled) ->
+  [
+    {verify, verify_none}
+  ] ++ get_sni_options(Host, SniEnabled).
 
-sni_options(Host, SslOptions) when SslOptions#ssl_options.sni_enabled -> 
+%% Options for verified SSL connections
+get_verified_options(Host, SniEnabled) ->
+  [
+    {verify, verify_peer},
+    {cacerts, public_key:cacerts_get()}
+  ] ++ get_hostname_check_options() ++ get_sni_options(Host, SniEnabled).
+
+%% Server Name Indication (SNI) options
+get_sni_options(Host, true) -> 
     [{server_name_indication, binary_to_list(Host)}];
-sni_options(_Host, _SslOptions) -> [].
+get_sni_options(_Host, false) -> [].
+
+%% Hostname verification options for wildcard certificates
+get_hostname_check_options() ->
+  [
+    {customize_hostname_check, [
+      {match_fun, public_key:pkix_verify_hostname_match_fun(https)}
+    ]}
+  ].
 
 connect(Config) ->
     Id = integer_to_list(erlang:unique_integer([positive])),
@@ -66,7 +67,6 @@ connect(Config) ->
         user = User,
         password = Password,
         ssl = Ssl,
-        ssl_options = SslOptions,
         connection_parameters = ConnectionParameters,
         pool_size = PoolSize,
         queue_target = QueueTarget,
@@ -77,7 +77,7 @@ connect(Config) ->
         rows_as_map = RowsAsMap,
         default_timeout = DefaultTimeout
     } = Config,
-    {SslActivated, ReturnedSslOptions} = default_ssl_options(Host, Ssl, SslOptions),
+    {SslActivated, ReturnedSslOptions} = default_ssl_options(Host, Ssl),
     Options1 = #{
         host => Host,
         port => Port,

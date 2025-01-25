@@ -32,11 +32,6 @@ pub type Config {
     password: Option(String),
     /// (default: SslDisabled): Whether to use SSL or not.
     ssl: Ssl,
-    /// (default: SslOptions(sni_enabled: True)): Additional SSL configuration options.
-    /// Used to fine-tune SSL connection behavior, such as SNI (Server Name Indication)
-    /// which is important for proper certificate verification when connecting to
-    /// databases with virtual hosting or multi-domain certificates.
-    ssl_options: SslOptions,
     /// (default: []): List of 2-tuples, where key and value must be binary
     /// strings. You can include any Postgres connection parameter here, such as
     /// `#("application_name", "myappname")` and `#("timezone", "GMT")`.
@@ -74,30 +69,28 @@ pub type Ssl {
   /// option to use SSL and should be always used by default.
   /// Never ignore CA certificate checking _unless you know exactly what you are
   /// doing_.
-  SslVerified
+  SslVerified(sni_enabled: Bool)
   /// Enable SSL connection, but don't check CA certificate.
   /// `SslVerified` should always be prioritized upon `SslUnverified`.
   /// As it implies, that option enables SSL, but as it is unverified, the
   /// connection can be unsafe. _Use this option only if you know what you're
   /// doing._ In case `pog` can not find the proper CA certificate, take a look
   /// at the README to get some help to inject the CA certificate in your OS.
-  SslUnverified
+  SslUnverified(sni_enabled: Bool)
   /// Disable SSL connection completely. Using this option will let the
   /// connection unsecured, and should be avoided in production environment.
   SslDisabled
 }
 
 pub type SslOptions {
-    /// Additional SSL configuration options for fine-tuning the SSL connection.
-    /// Currently supports Server Name Indication (SNI) configuration:
-    /// - `sni_enabled`: When set to `True` (default), enables SNI using the connection
-    /// hostname. SNI helps ensure proper SSL certificate verification by sending
-    /// the server name during the SSL handshake. This is particularly important
-    /// when connecting to databases that use virtual hosting or when the database
-    /// certificate includes multiple domain names.
-    SslOptions(
-        sni_enabled: Bool
-    )
+  /// Additional SSL configuration options for fine-tuning the SSL connection.
+  /// Currently supports Server Name Indication (SNI) configuration:
+  /// - `sni_enabled`: When set to `True` (default), enables SNI using the connection
+  /// hostname. SNI helps ensure proper SSL certificate verification by sending
+  /// the server name during the SSL handshake. This is particularly important
+  /// when connecting to databases that use virtual hosting or when the database
+  /// certificate includes multiple domain names.
+  SslOptions(sni_enabled: Bool)
 }
 
 /// Database server hostname.
@@ -131,16 +124,21 @@ pub fn password(config: Config, password: Option(String)) -> Config {
 
 /// Whether to use SSL or not.
 ///
-/// (default: False)
+/// The SSL configuration provides three modes:
+/// - `SslVerified`: Most secure option that verifies CA certificates (recommended)
+/// - `SslUnverified`: Enables SSL without certificate verification (use with caution)
+/// - `SslDisabled`: No SSL encryption (not recommended for production)
+///
+/// Each SSL mode can be configured with SNI (Server Name Indication) support,
+/// which is particularly useful for virtual hosting and multi-domain certificates.
+///
+/// Example:
+/// ```gleam
+/// pog.default_config()
+/// |> pog.ssl(pog.SslVerified(sni_enabled: True))
+/// ```
 pub fn ssl(config: Config, ssl: Ssl) -> Config {
   Config(..config, ssl:)
-}
-
-/// Ssl options you'd like to change
-///
-/// (default: SslOptions(sni_enabled: True))
-pub fn ssl_options(config: Config, ssl_options: SslOptions) -> Config {
-    Config(..config, ssl_options:)
 }
 
 /// Any Postgres connection parameter here, such as
@@ -150,10 +148,10 @@ pub fn connection_parameter(
   name name: String,
   value value: String,
 ) -> Config {
-  Config(
-    ..config,
-    connection_parameters: [#(name, value), ..config.connection_parameters],
-  )
+  Config(..config, connection_parameters: [
+    #(name, value),
+    ..config.connection_parameters
+  ])
 }
 
 /// Number of connections to keep open with the database
@@ -237,7 +235,6 @@ pub fn default_config() -> Config {
     user: "postgres",
     password: None,
     ssl: SslDisabled,
-    ssl_options: SslOptions(sni_enabled: True),
     connection_parameters: [],
     pool_size: 10,
     queue_target: 50,
@@ -316,8 +313,8 @@ fn extract_ssl_mode(query: option.Option(String)) -> Result(Ssl, Nil) {
       use query <- result.then(uri.parse_query(query))
       use sslmode <- result.then(list.key_find(query, "sslmode"))
       case sslmode {
-        "require" -> Ok(SslUnverified)
-        "verify-ca" | "verify-full" -> Ok(SslVerified)
+        "require" -> Ok(SslUnverified(sni_enabled: True))
+        "verify-ca" | "verify-full" -> Ok(SslVerified(sni_enabled: True))
         "disable" -> Ok(SslDisabled)
         _ -> Error(Nil)
       }
