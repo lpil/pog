@@ -82,17 +82,6 @@ pub type Ssl {
   SslDisabled
 }
 
-pub type SslOptions {
-  /// Additional SSL configuration options for fine-tuning the SSL connection.
-  /// Currently supports Server Name Indication (SNI) configuration:
-  /// - `sni_enabled`: When set to `True` (default), enables SNI using the connection
-  /// hostname. SNI helps ensure proper SSL certificate verification by sending
-  /// the server name during the SSL handshake. This is particularly important
-  /// when connecting to databases that use virtual hosting or when the database
-  /// certificate includes multiple domain names.
-  SslOptions(sni_enabled: Bool)
-}
-
 /// Database server hostname.
 ///
 /// (default: 127.0.0.1)

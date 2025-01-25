@@ -77,14 +77,14 @@ connect(Config) ->
         rows_as_map = RowsAsMap,
         default_timeout = DefaultTimeout
     } = Config,
-    {SslActivated, ReturnedSslOptions} = default_ssl_options(Host, Ssl),
+    {SslActivated, SslOptions} = default_ssl_options(Host, Ssl),
     Options1 = #{
         host => Host,
         port => Port,
         database => Database,
         user => User,
         ssl => SslActivated,
-        ssl_options => ReturnedSslOptions,
+        ssl_options => SslOptions,
         connection_parameters => ConnectionParameters,
         pool_size => PoolSize,
         queue_target => QueueTarget,
