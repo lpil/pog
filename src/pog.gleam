@@ -69,14 +69,14 @@ pub type Ssl {
   /// option to use SSL and should be always used by default.
   /// Never ignore CA certificate checking _unless you know exactly what you are
   /// doing_.
-  SslVerified
+  SslVerified(sni_enabled: Bool)
   /// Enable SSL connection, but don't check CA certificate.
   /// `SslVerified` should always be prioritized upon `SslUnverified`.
   /// As it implies, that option enables SSL, but as it is unverified, the
   /// connection can be unsafe. _Use this option only if you know what you're
   /// doing._ In case `pog` can not find the proper CA certificate, take a look
   /// at the README to get some help to inject the CA certificate in your OS.
-  SslUnverified
+  SslUnverified(sni_enabled: Bool)
   /// Disable SSL connection completely. Using this option will let the
   /// connection unsecured, and should be avoided in production environment.
   SslDisabled
@@ -113,7 +113,19 @@ pub fn password(config: Config, password: Option(String)) -> Config {
 
 /// Whether to use SSL or not.
 ///
-/// (default: False)
+/// The SSL configuration provides three modes:
+/// - `SslVerified`: Most secure option that verifies CA certificates (recommended)
+/// - `SslUnverified`: Enables SSL without certificate verification (use with caution)
+/// - `SslDisabled`: No SSL encryption (not recommended for production)
+///
+/// Each SSL mode can be configured with SNI (Server Name Indication) support,
+/// which is particularly useful for virtual hosting and multi-domain certificates.
+///
+/// Example:
+/// ```gleam
+/// pog.default_config()
+/// |> pog.ssl(pog.SslVerified(sni_enabled: True))
+/// ```
 pub fn ssl(config: Config, ssl: Ssl) -> Config {
   Config(..config, ssl:)
 }
@@ -125,10 +137,10 @@ pub fn connection_parameter(
   name name: String,
   value value: String,
 ) -> Config {
-  Config(
-    ..config,
-    connection_parameters: [#(name, value), ..config.connection_parameters],
-  )
+  Config(..config, connection_parameters: [
+    #(name, value),
+    ..config.connection_parameters
+  ])
 }
 
 /// Number of connections to keep open with the database
@@ -290,8 +302,8 @@ fn extract_ssl_mode(query: option.Option(String)) -> Result(Ssl, Nil) {
       use query <- result.then(uri.parse_query(query))
       use sslmode <- result.then(list.key_find(query, "sslmode"))
       case sslmode {
-        "require" -> Ok(SslUnverified)
-        "verify-ca" | "verify-full" -> Ok(SslVerified)
+        "require" -> Ok(SslUnverified(sni_enabled: True))
+        "verify-ca" | "verify-full" -> Ok(SslVerified(sni_enabled: True))
         "disable" -> Ok(SslDisabled)
         _ -> Error(Nil)
       }

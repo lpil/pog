@@ -26,17 +26,36 @@ coerce(Value) ->
 %% will not be handled correctly.
 default_ssl_options(Host, Ssl) ->
   case Ssl of
-    ssl_disabled -> {false, []};
-    ssl_unverified -> {true, [{verify, verify_none}]};
-    ssl_verified -> {true, [
-      {verify, verify_peer},
-      {cacerts, public_key:cacerts_get()},
-      {server_name_indication, binary_to_list(Host)},
-      {customize_hostname_check, [
-        {match_fun, public_key:pkix_verify_hostname_match_fun(https)}
-      ]}
-    ]}
+    {ssl_disabled} -> {false, []};
+    {ssl_unverified, SniEnabled} -> {true, get_unverified_options(Host, SniEnabled)};
+    {ssl_verified, SniEnabled} -> {true, get_verified_options(Host, SniEnabled)}
   end.
+
+%% Options for unverified SSL connections
+get_unverified_options(Host, SniEnabled) ->
+  [
+    {verify, verify_none}
+  ] ++ get_sni_options(Host, SniEnabled).
+
+%% Options for verified SSL connections
+get_verified_options(Host, SniEnabled) ->
+  [
+    {verify, verify_peer},
+    {cacerts, public_key:cacerts_get()}
+  ] ++ get_hostname_check_options() ++ get_sni_options(Host, SniEnabled).
+
+%% Server Name Indication (SNI) options
+get_sni_options(Host, true) -> 
+    [{server_name_indication, binary_to_list(Host)}];
+get_sni_options(_Host, false) -> [].
+
+%% Hostname verification options for wildcard certificates
+get_hostname_check_options() ->
+  [
+    {customize_hostname_check, [
+      {match_fun, public_key:pkix_verify_hostname_match_fun(https)}
+    ]}
+  ].
 
 connect(Config) ->
     Id = integer_to_list(erlang:unique_integer([positive])),
