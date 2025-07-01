@@ -12,6 +12,7 @@ import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
+import gleam/time/calendar.{type Date, type TimeOfDay}
 import gleam/uri.{Uri}
 
 /// The port that will be used when none is specified.
@@ -125,10 +126,10 @@ pub fn connection_parameter(
   name name: String,
   value value: String,
 ) -> Config {
-  Config(
-    ..config,
-    connection_parameters: [#(name, value), ..config.connection_parameters],
-  )
+  Config(..config, connection_parameters: [
+    #(name, value),
+    ..config.connection_parameters
+  ])
 }
 
 /// Number of connections to keep open with the database
@@ -346,15 +347,15 @@ pub fn array(converter: fn(a) -> Value, values: List(a)) -> Value {
   |> coerce_value
 }
 
-pub fn timestamp(timestamp: Timestamp) -> Value {
-  coerce_value(#(date(timestamp.date), time(timestamp.time)))
+pub fn datetime(date: Date, time: TimeOfDay) -> Value {
+  coerce_value(#(date(date), time(time)))
 }
 
 pub fn date(date: Date) -> Value {
   coerce_value(#(date.year, date.month, date.day))
 }
 
-pub fn time(time: Time) -> Value {
+pub fn time(time: TimeOfDay) -> Value {
   let seconds = int.to_float(time.seconds)
   let seconds = seconds +. int.to_float(time.microseconds) /. 1_000_000.0
   coerce_value(#(time.hours, time.minutes, seconds))
@@ -760,20 +761,20 @@ pub fn error_code_name(error_code: String) -> Result(String, Nil) {
   }
 }
 
-pub fn timestamp_decoder() -> decode.Decoder(Timestamp) {
+pub fn datetime_without_zone_decoder() -> decode.Decoder(#(Date, TimeOfDay)) {
   use date <- decode.field(0, date_decoder())
   use time <- decode.field(1, time_decoder())
-  decode.success(Timestamp(date, time))
+  decode.success(#(date, time))
 }
 
 pub fn date_decoder() -> decode.Decoder(Date) {
   use year <- decode.field(0, decode.int)
   use month <- decode.field(1, decode.int)
   use day <- decode.field(2, decode.int)
-  decode.success(Date(year:, month:, day:))
+  decode.success(calendar.Date(year:, month:, day:))
 }
 
-pub fn time_decoder() -> decode.Decoder(Time) {
+pub fn time_decoder() -> decode.Decoder(TimeOfDay) {
   use hours <- decode.field(0, decode.int)
   use minutes <- decode.field(1, decode.int)
   use #(seconds, microseconds) <- decode.field(2, seconds_decoder())
@@ -795,16 +796,4 @@ fn seconds_decoder() -> decode.Decoder(#(Int, Int)) {
     })
   }
   decode.one_of(int, [float])
-}
-
-pub type Date {
-  Date(year: Int, month: Int, day: Int)
-}
-
-pub type Time {
-  Time(hours: Int, minutes: Int, seconds: Int, microseconds: Int)
-}
-
-pub type Timestamp {
-  Timestamp(date: Date, time: Time)
 }
