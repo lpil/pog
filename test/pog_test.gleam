@@ -509,10 +509,10 @@ pub fn expected_maps_test() {
         True,
         ["black"],
         #(
-          calendar.Date(2022, calendar.March, 10),
+          calendar.Date(2022, calendar.October, 10),
           calendar.TimeOfDay(11, 30, 30, 0),
         ),
-        calendar.Date(2020, calendar.October, 4),
+        calendar.Date(2020, calendar.March, 4),
       ),
     ]
 
