@@ -110,7 +110,7 @@ query(#pog_pool{name = Name}, Sql, Arguments, Timeout) ->
         none -> 
             #{pool => Name};
         {some, QueryTimeout} -> 
-            #{pool => Name, pool_options => [{timeout, QueryTimeout}]},
+            #{pool => Name, pool_options => [{timeout, QueryTimeout}]}
     end,
     Res = pgo:query(Sql, Arguments, Options),
     case Res of
