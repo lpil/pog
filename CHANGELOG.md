@@ -1,5 +1,11 @@
 # Changelog
 
+## v4.0.0 - Unreleased
+
+- `connect` and `disconnect` have been removed in favour of `start` and `supervised`.
+- TODO: more flexible transactions.
+- TODO: date functions changed.
+
 ## v3.3.0 - 2025-07-03
 
 - Updated `result.then` to `result.try` to resolve deprecation warnings.
