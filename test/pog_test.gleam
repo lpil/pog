@@ -3,7 +3,6 @@ import gleam/dynamic/decode.{type Decoder}
 import gleam/option.{None, Some}
 import gleam/time/calendar
 import gleeunit
-import gleeunit/should
 import pog
 
 pub fn main() {
@@ -19,8 +18,7 @@ pub fn url_config_everything_test() {
     |> pog.user("u")
     |> pog.password(Some("p"))
 
-  pog.url_config("postgres://u:p@db.test:1234/my_db")
-  |> should.equal(Ok(expected))
+  assert pog.url_config("postgres://u:p@db.test:1234/my_db") == Ok(expected)
 }
 
 pub fn url_config_alternative_postgres_protocol_test() {
@@ -31,13 +29,11 @@ pub fn url_config_alternative_postgres_protocol_test() {
     |> pog.database("my_db")
     |> pog.user("u")
     |> pog.password(Some("p"))
-  pog.url_config("postgresql://u:p@db.test:1234/my_db")
-  |> should.equal(Ok(expected))
+  assert pog.url_config("postgresql://u:p@db.test:1234/my_db") == Ok(expected)
 }
 
 pub fn url_config_not_postgres_protocol_test() {
-  pog.url_config("foo://u:p@db.test:1234/my_db")
-  |> should.equal(Error(Nil))
+  assert pog.url_config("foo://u:p@db.test:1234/my_db") == Error(Nil)
 }
 
 pub fn url_config_no_password_test() {
@@ -48,8 +44,7 @@ pub fn url_config_no_password_test() {
     |> pog.database("my_db")
     |> pog.user("u")
     |> pog.password(None)
-  pog.url_config("postgres://u@db.test:1234/my_db")
-  |> should.equal(Ok(expected))
+  assert pog.url_config("postgres://u@db.test:1234/my_db") == Ok(expected)
 }
 
 pub fn url_config_no_port_test() {
@@ -60,13 +55,11 @@ pub fn url_config_no_port_test() {
     |> pog.database("my_db")
     |> pog.user("u")
     |> pog.password(None)
-  pog.url_config("postgres://u@db.test/my_db")
-  |> should.equal(Ok(expected))
+  assert pog.url_config("postgres://u@db.test/my_db") == Ok(expected)
 }
 
 pub fn url_config_path_slash_test() {
-  pog.url_config("postgres://u:p@db.test:1234/my_db/foo")
-  |> should.equal(Error(Nil))
+  assert pog.url_config("postgres://u:p@db.test:1234/my_db/foo") == Error(Nil)
 }
 
 fn start_default() {
@@ -99,10 +92,8 @@ pub fn inserting_new_rows_test() {
     (DEFAULT, 'felix', false, ARRAY ['grey'], now(), '2020-03-05')"
   let assert Ok(returned) = pog.query(sql) |> pog.execute(db)
 
-  returned.count
-  |> should.equal(2)
-  returned.rows
-  |> should.equal([])
+  assert returned.count == 2
+  assert returned.rows == []
 
   pog.disconnect(db)
 }
@@ -123,10 +114,8 @@ pub fn inserting_new_rows_and_returning_test() {
     |> pog.returning(decode.at([0], decode.string))
     |> pog.execute(db)
 
-  returned.count
-  |> should.equal(2)
-  returned.rows
-  |> should.equal(["bill", "felix"])
+  assert returned.count == 2
+  assert returned.rows == ["bill", "felix"]
 
   pog.disconnect(db)
 }
@@ -161,22 +150,21 @@ pub fn selecting_rows_test() {
     })
     |> pog.execute(db)
 
-  returned.count
-  |> should.equal(1)
-  returned.rows
-  |> should.equal([
-    #(
-      id,
-      "neo",
-      True,
-      ["black"],
+  assert returned.count == 1
+  assert returned.rows
+    == [
       #(
-        calendar.Date(2022, calendar.October, 10),
-        calendar.TimeOfDay(11, 30, 30, 100_000_000),
+        id,
+        "neo",
+        True,
+        ["black"],
+        #(
+          calendar.Date(2022, calendar.October, 10),
+          calendar.TimeOfDay(11, 30, 30, 100_000_000),
+        ),
+        calendar.Date(2020, calendar.March, 4),
       ),
-      calendar.Date(2020, calendar.March, 4),
-    ),
-  ])
+    ]
 
   pog.disconnect(db)
 }
@@ -188,12 +176,9 @@ pub fn invalid_sql_test() {
   let assert Error(pog.PostgresqlError(code, name, message)) =
     pog.query(sql) |> pog.execute(db)
 
-  code
-  |> should.equal("42601")
-  name
-  |> should.equal("syntax_error")
-  message
-  |> should.equal("syntax error at or near \"select\"")
+  assert code == "42601"
+  assert name == "syntax_error"
+  assert message == "syntax error at or near \"select\""
 
   pog.disconnect(db)
 }
@@ -211,16 +196,12 @@ pub fn insert_constraint_error_test() {
   let assert Error(pog.ConstraintViolated(message, constraint, detail)) =
     pog.query(sql) |> pog.execute(db)
 
-  constraint
-  |> should.equal("cats_pkey")
+  assert constraint == "cats_pkey"
 
-  detail
-  |> should.equal("Key (id)=(900) already exists.")
+  assert detail == "Key (id)=(900) already exists."
 
-  message
-  |> should.equal(
-    "duplicate key value violates unique constraint \"cats_pkey\"",
-  )
+  assert message
+    == "duplicate key value violates unique constraint \"cats_pkey\""
 
   pog.disconnect(db)
 }
@@ -232,12 +213,9 @@ pub fn select_from_unknown_table_test() {
   let assert Error(pog.PostgresqlError(code, name, message)) =
     pog.query(sql) |> pog.execute(db)
 
-  code
-  |> should.equal("42P01")
-  name
-  |> should.equal("undefined_table")
-  message
-  |> should.equal("relation \"unknown\" does not exist")
+  assert code == "42P01"
+  assert name == "undefined_table"
+  assert message == "relation \"unknown\" does not exist"
 
   pog.disconnect(db)
 }
@@ -253,14 +231,10 @@ pub fn insert_with_incorrect_type_test() {
   let assert Error(pog.PostgresqlError(code, name, message)) =
     pog.query(sql) |> pog.execute(db)
 
-  code
-  |> should.equal("42804")
-  name
-  |> should.equal("datatype_mismatch")
-  message
-  |> should.equal(
-    "column \"id\" is of type integer but expression is of type boolean",
-  )
+  assert code == "42804"
+  assert name == "datatype_mismatch"
+  assert message
+    == "column \"id\" is of type integer but expression is of type boolean"
 
   pog.disconnect(db)
 }
@@ -269,9 +243,8 @@ pub fn execute_with_wrong_number_of_arguments_test() {
   let db = start_default()
   let sql = "SELECT * FROM cats WHERE id = $1"
 
-  pog.query(sql)
-  |> pog.execute(db)
-  |> should.equal(Error(pog.UnexpectedArgumentCount(expected: 1, got: 0)))
+  assert pog.execute(pog.query(sql), db)
+    == Error(pog.UnexpectedArgumentCount(expected: 1, got: 0))
 
   pog.disconnect(db)
 }
@@ -283,21 +256,21 @@ fn assert_roundtrip(
   encoder: fn(a) -> pog.Value,
   decoder: Decoder(a),
 ) -> pog.Connection {
-  pog.query("select $1::" <> type_name)
-  |> pog.parameter(encoder(value))
-  |> pog.returning(decode.at([0], decoder))
-  |> pog.execute(db)
-  |> should.equal(Ok(pog.Returned(count: 1, rows: [value])))
+  assert pog.query("select $1::" <> type_name)
+    |> pog.parameter(encoder(value))
+    |> pog.returning(decode.at([0], decoder))
+    |> pog.execute(db)
+    == Ok(pog.Returned(count: 1, rows: [value]))
   db
 }
 
 pub fn null_test() {
   let db = start_default()
-  pog.query("select $1")
-  |> pog.parameter(pog.null())
-  |> pog.returning(decode.at([0], decode.optional(decode.int)))
-  |> pog.execute(db)
-  |> should.equal(Ok(pog.Returned(count: 1, rows: [None])))
+  assert pog.query("select $1")
+    |> pog.parameter(pog.null())
+    |> pog.returning(decode.at([0], decode.optional(decode.int)))
+    |> pog.execute(db)
+    == Ok(pog.Returned(count: 1, rows: [None]))
 
   pog.disconnect(db)
 }
@@ -426,27 +399,25 @@ pub fn nullable_test() {
 pub fn expected_argument_type_test() {
   let db = start_default()
 
-  pog.query("select $1::int")
-  |> pog.returning(decode.at([0], decode.string))
-  |> pog.parameter(pog.float(1.2))
-  |> pog.execute(db)
-  |> should.equal(Error(pog.UnexpectedArgumentType("int4", "1.2")))
+  assert pog.query("select $1::int")
+    |> pog.returning(decode.at([0], decode.string))
+    |> pog.parameter(pog.float(1.2))
+    |> pog.execute(db)
+    == Error(pog.UnexpectedArgumentType("int4", "1.2"))
 
   pog.disconnect(db)
 }
 
 pub fn expected_return_type_test() {
   let db = start_default()
-  pog.query("select 1")
-  |> pog.returning(decode.at([0], decode.string))
-  |> pog.execute(db)
-  |> should.equal(
-    Error(
+  assert pog.query("select 1")
+    |> pog.returning(decode.at([0], decode.string))
+    |> pog.execute(db)
+    == Error(
       pog.UnexpectedResultType([
         decode.DecodeError(expected: "String", found: "Int", path: ["0"]),
       ]),
-    ),
-  )
+    )
 
   pog.disconnect(db)
 }
@@ -454,11 +425,13 @@ pub fn expected_return_type_test() {
 pub fn expected_five_millis_timeout_test() {
   let db = start_default()
 
-  pog.query("select sub.ret from (select pg_sleep(0.05), 'OK' as ret) as sub")
-  |> pog.timeout(5)
-  |> pog.returning(decode.at([0], decode.string))
-  |> pog.execute(db)
-  |> should.equal(Error(pog.QueryTimeout))
+  assert pog.query(
+      "select sub.ret from (select pg_sleep(0.05), 'OK' as ret) as sub",
+    )
+    |> pog.timeout(5)
+    |> pog.returning(decode.at([0], decode.string))
+    |> pog.execute(db)
+    == Error(pog.QueryTimeout)
 
   pog.disconnect(db)
 }
@@ -466,11 +439,13 @@ pub fn expected_five_millis_timeout_test() {
 pub fn expected_ten_millis_no_timeout_test() {
   let db = start_default()
 
-  pog.query("select sub.ret from (select pg_sleep(0.01), 'OK' as ret) as sub")
-  |> pog.timeout(30)
-  |> pog.returning(decode.at([0], decode.string))
-  |> pog.execute(db)
-  |> should.equal(Ok(pog.Returned(1, ["OK"])))
+  assert pog.query(
+      "select sub.ret from (select pg_sleep(0.01), 'OK' as ret) as sub",
+    )
+    |> pog.timeout(30)
+    |> pog.returning(decode.at([0], decode.string))
+    |> pog.execute(db)
+    == Ok(pog.Returned(1, ["OK"]))
 
   pog.disconnect(db)
 }
@@ -481,10 +456,12 @@ pub fn expected_ten_millis_no_default_timeout_test() {
     |> pog.default_timeout(30)
     |> pog.connect
 
-  pog.query("select sub.ret from (select pg_sleep(0.01), 'OK' as ret) as sub")
-  |> pog.returning(decode.at([0], decode.string))
-  |> pog.execute(db)
-  |> should.equal(Ok(pog.Returned(1, ["OK"])))
+  assert pog.query(
+      "select sub.ret from (select pg_sleep(0.01), 'OK' as ret) as sub",
+    )
+    |> pog.returning(decode.at([0], decode.string))
+    |> pog.execute(db)
+    == Ok(pog.Returned(1, ["OK"]))
 
   pog.disconnect(db)
 }
@@ -523,22 +500,21 @@ pub fn expected_maps_test() {
     })
     |> pog.execute(db)
 
-  returned.count
-  |> should.equal(1)
-  returned.rows
-  |> should.equal([
-    #(
-      id,
-      "neo",
-      True,
-      ["black"],
+  assert returned.count == 1
+  assert returned.rows
+    == [
       #(
-        calendar.Date(2022, calendar.March, 10),
-        calendar.TimeOfDay(11, 30, 30, 0),
+        id,
+        "neo",
+        True,
+        ["black"],
+        #(
+          calendar.Date(2022, calendar.March, 10),
+          calendar.TimeOfDay(11, 30, 30, 0),
+        ),
+        calendar.Date(2020, calendar.October, 4),
       ),
-      calendar.Date(2020, calendar.October, 4),
-    ),
-  ])
+    ]
 
   pog.disconnect(db)
 }
