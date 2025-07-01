@@ -279,10 +279,15 @@ fn extract_user_password(
 }
 
 /// Expects `sslmode` to be `require`, `verify-ca`, `verify-full` or `disable`.
+///
 /// If `sslmode` is set, but not one of those value, fails.
+///
 /// If `sslmode` is `verify-ca` or `verify-full`, returns `SslVerified`.
+///
 /// If `sslmode` is `require`, returns `SslUnverified`.
+///
 /// If `sslmode` is unset, returns `SslDisabled`.
+///
 fn extract_ssl_mode(query: option.Option(String)) -> Result(Ssl, Nil) {
   case query {
     option.None -> Ok(SslDisabled)
