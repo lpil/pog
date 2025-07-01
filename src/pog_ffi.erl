@@ -106,11 +106,12 @@ transaction(#pog_pool{name = Name} = Conn, Callback) ->
 
 
 query(#pog_pool{name = Name}, Sql, Arguments, Timeout) ->
-    PoolOptions = case Timeout of
-      none -> [];
-      {some, QueryTimeout} -> [{timeout, QueryTimeout}]
+    Options = case Timeout of
+        none -> 
+            #{pool => Name};
+        {some, QueryTimeout} -> 
+            #{pool => Name, pool_options => [{timeout, QueryTimeout}]},
     end,
-    Options = #{pool => Name, pool_options => PoolOptions},
     Res = pgo:query(Sql, Arguments, Options),
     case Res of
         #{rows := Rows, num_rows := NumRows} ->
