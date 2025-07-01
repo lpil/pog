@@ -171,7 +171,7 @@ pub fn selecting_rows_test() {
       True,
       ["black"],
       #(
-        calendar.Date(2022, calendar.April, 10),
+        calendar.Date(2022, calendar.October, 10),
         calendar.TimeOfDay(11, 30, 30, 100_000),
       ),
       calendar.Date(2020, calendar.March, 4),
@@ -470,7 +470,7 @@ pub fn expected_ten_millis_no_timeout_test() {
   |> pog.timeout(30)
   |> pog.returning(decode.at([0], decode.string))
   |> pog.execute(db)
-  |> should.equal(Ok(pog.Returned(1, ["Ok"])))
+  |> should.equal(Ok(pog.Returned(1, ["OK"])))
 
   pog.disconnect(db)
 }
@@ -484,7 +484,7 @@ pub fn expected_ten_millis_no_default_timeout_test() {
   pog.query("select sub.ret from (select pg_sleep(0.01), 'OK' as ret) as sub")
   |> pog.returning(decode.at([0], decode.string))
   |> pog.execute(db)
-  |> should.equal(Ok(pog.Returned(1, ["Ok"])))
+  |> should.equal(Ok(pog.Returned(1, ["OK"])))
 
   pog.disconnect(db)
 }
