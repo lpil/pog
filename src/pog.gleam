@@ -357,7 +357,21 @@ pub fn calendar_datetime(date: Date, time: TimeOfDay) -> Value {
 }
 
 pub fn calendar_date(date: Date) -> Value {
-  coerce_value(#(date.year, date.month, date.day))
+  let month = case date.month {
+    calendar.January -> 1
+    calendar.February -> 2
+    calendar.March -> 3
+    calendar.April -> 4
+    calendar.May -> 5
+    calendar.June -> 6
+    calendar.July -> 7
+    calendar.August -> 8
+    calendar.September -> 9
+    calendar.October -> 10
+    calendar.November -> 11
+    calendar.December -> 12
+  }
+  coerce_value(#(date.year, month, date.day))
 }
 
 pub fn calendar_time_of_day(time: TimeOfDay) -> Value {
