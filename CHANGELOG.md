@@ -1,5 +1,11 @@
 # Changelog
 
+## v4.0.0 - Unreleased
+
+- `connect` and `disconnect` have been removed in favour of `start` and `supervised`.
+- TODO: more flexible transactions.
+- TODO: date functions changed.
+
 ## v3.2.0 - 2025-01-16
 
 - The `url_config` function now defaults to port (5432) when port is not specified.

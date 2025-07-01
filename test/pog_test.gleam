@@ -1,6 +1,7 @@
 import exception
 import gleam/dynamic/decode.{type Decoder}
 import gleam/option.{None, Some}
+import gleam/time/calendar
 import gleeunit
 import gleeunit/should
 import pog
@@ -154,8 +155,8 @@ pub fn selecting_rows_test() {
       use x1 <- decode.field(1, decode.string)
       use x2 <- decode.field(2, decode.bool)
       use x3 <- decode.field(3, decode.list(decode.string))
-      use x4 <- decode.field(4, pog.timestamp_decoder())
-      use x5 <- decode.field(5, pog.date_decoder())
+      use x4 <- decode.field(4, pog.calendar_datetime_decoder())
+      use x5 <- decode.field(5, pog.calendar_date_decoder())
       decode.success(#(x0, x1, x2, x3, x4, x5))
     })
     |> pog.execute(db)
@@ -169,8 +170,11 @@ pub fn selecting_rows_test() {
       "neo",
       True,
       ["black"],
-      pog.Timestamp(pog.Date(2022, 10, 10), pog.Time(11, 30, 30, 100_000)),
-      pog.Date(2020, 3, 4),
+      #(
+        calendar.Date(2022, calendar.April, 10),
+        calendar.TimeOfDay(11, 30, 30, 100_000),
+      ),
+      calendar.Date(2020, calendar.March, 4),
     ),
   ])
 
@@ -379,24 +383,13 @@ pub fn array_test() {
   |> pog.disconnect
 }
 
-pub fn datetime_test() {
-  start_default()
-  |> assert_roundtrip(
-    pog.Timestamp(pog.Date(2022, 10, 12), pog.Time(11, 30, 33, 101)),
-    "timestamp",
-    pog.timestamp,
-    pog.timestamp_decoder(),
-  )
-  |> pog.disconnect
-}
-
 pub fn date_test() {
   start_default()
   |> assert_roundtrip(
-    pog.Date(2022, 10, 11),
+    calendar.Date(2022, calendar.October, 11),
     "date",
-    pog.date,
-    pog.date_decoder(),
+    pog.calendar_date,
+    pog.calendar_date_decoder(),
   )
   |> pog.disconnect
 }
@@ -523,9 +516,9 @@ pub fn expected_maps_test() {
       use colors <- decode.field("colors", decode.list(decode.string))
       use last_petted_at <- decode.field(
         "last_petted_at",
-        pog.timestamp_decoder(),
+        pog.calendar_datetime_decoder(),
       )
-      use birthday <- decode.field("birthday", pog.date_decoder())
+      use birthday <- decode.field("birthday", pog.calendar_date_decoder())
       decode.success(#(id, name, is_cute, colors, last_petted_at, birthday))
     })
     |> pog.execute(db)
@@ -539,8 +532,11 @@ pub fn expected_maps_test() {
       "neo",
       True,
       ["black"],
-      pog.Timestamp(pog.Date(2022, 10, 10), pog.Time(11, 30, 30, 0)),
-      pog.Date(2020, 3, 4),
+      #(
+        calendar.Date(2022, calendar.October, 10),
+        calendar.TimeOfDay(11, 30, 30, 0),
+      ),
+      calendar.Date(2020, calendar.October, 4),
     ),
   ])
 
