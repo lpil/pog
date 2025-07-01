@@ -73,6 +73,7 @@ connect(Config) ->
         idle_interval => IdleInterval,
         trace => Trace,
         decode_opts => [{return_rows_as_maps, RowsAsMap}],
+        pool_options => [{timeout, DefaultTimeout}],
         socket_options => case IpVersion of
             ipv4 -> [];
             ipv6 -> [inet6]
@@ -83,7 +84,7 @@ connect(Config) ->
         none -> Options1
     end,
     {ok, Pid} = pgo_pool:start_link(PoolName, Options2),
-    #pog_pool{name = PoolName, pid = Pid, default_timeout = DefaultTimeout}.
+    #pog_pool{name = PoolName, pid = Pid}.
 
 disconnect(#pog_pool{pid = Pid}) ->
     erlang:exit(Pid, normal),
@@ -104,12 +105,12 @@ transaction(#pog_pool{name = Name} = Conn, Callback) ->
     end.
 
 
-query(#pog_pool{name = Name, default_timeout = DefaultTimeout}, Sql, Arguments, Timeout) ->
-    Timeout1 = case Timeout of
-      none -> DefaultTimeout;
-      {some, QueryTimeout} -> QueryTimeout
+query(#pog_pool{name = Name}, Sql, Arguments, Timeout) ->
+    PoolOptions = case Timeout of
+      none -> [];
+      {some, QueryTimeout} -> [{timeout, QueryTimeout}]
     end,
-    Options = #{pool => Name, pool_options => [{timeout, Timeout1}]},
+    Options = #{pool => Name, pool_options => PoolOptions},
     Res = pgo:query(Sql, Arguments, Options),
     case Res of
         #{rows := Rows, num_rows := NumRows} ->
