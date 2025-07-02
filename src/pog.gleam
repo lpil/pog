@@ -59,9 +59,6 @@ pub type Config {
     /// (default: False) By default, pgo will return a n-tuple, in the order of the query.
     /// By setting `rows_as_map` to `True`, the result will be `Dict`.
     rows_as_map: Bool,
-    /// (default: 5000): Default time in milliseconds to wait before the query
-    /// is considered timeout. Timeout can be edited per query.
-    default_timeout: Int,
   )
 }
 
@@ -187,13 +184,6 @@ pub fn rows_as_map(config: Config, rows_as_map: Bool) -> Config {
   Config(..config, rows_as_map:)
 }
 
-/// By default, pog have a default value of 5000ms as timeout.
-/// By setting `default_timeout`, every queries will now use that timeout.
-/// The timeout is given in milliseconds.
-pub fn default_timeout(config: Config, default_timeout: Int) -> Config {
-  Config(..config, default_timeout:)
-}
-
 /// The internet protocol version to use.
 pub type IpVersion {
   /// Internet Protocol version 4 (IPv4)
@@ -221,7 +211,6 @@ pub fn default_config() -> Config {
     trace: False,
     ip_version: Ipv4,
     rows_as_map: False,
-    default_timeout: 5000,
   )
 }
 
@@ -417,7 +406,7 @@ fn run_query(
   a: Connection,
   b: String,
   c: List(Value),
-  timeout: Option(Int),
+  timeout: Int,
 ) -> Result(#(Int, List(Dynamic)), QueryError)
 
 pub type QueryError {
@@ -447,7 +436,7 @@ pub opaque type Query(row_type) {
     sql: String,
     parameters: List(Value),
     row_decoder: Decoder(row_type),
-    timeout: option.Option(Int),
+    timeout: Int,
   )
 }
 
@@ -455,12 +444,7 @@ pub opaque type Query(row_type) {
 /// functions.
 ///
 pub fn query(sql: String) -> Query(Nil) {
-  Query(
-    sql:,
-    parameters: [],
-    row_decoder: decode.success(Nil),
-    timeout: option.None,
-  )
+  Query(sql:, parameters: [], row_decoder: decode.success(Nil), timeout: 5000)
 }
 
 /// Set the decoder to use for the type of row returned by executing this
@@ -480,11 +464,14 @@ pub fn parameter(query: Query(t1), parameter: Value) -> Query(t1) {
   Query(..query, parameters: [parameter, ..query.parameters])
 }
 
-/// Use a custom timeout for the query. This timeout will take precedence over
+/// Use a custom timeout for the query, in milliseconds.
 /// the default connection timeout.
-/// The timeout is given in milliseconds.
+///
+/// If this function is not used to give a timeout then default of 5000 ms is
+/// used.
+///
 pub fn timeout(query: Query(t1), timeout: Int) -> Query(t1) {
-  Query(..query, timeout: Some(timeout))
+  Query(..query, timeout:)
 }
 
 /// Run a query against a PostgreSQL database.

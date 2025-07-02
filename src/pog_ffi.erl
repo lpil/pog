@@ -2,7 +2,7 @@
 
 -export([query/4, connect/1, disconnect/1, coerce/1, null/0, transaction/2]).
 
--record(pog_pool, {name, pid, default_timeout}).
+-record(pog_pool, {name, pid}).
 
 -include_lib("pog/include/pog_Config.hrl").
 -include_lib("pg_types/include/pg_types.hrl").
@@ -55,8 +55,7 @@ connect(Config) ->
         idle_interval = IdleInterval,
         trace = Trace,
         ip_version = IpVersion,
-        rows_as_map = RowsAsMap,
-        default_timeout = DefaultTimeout
+        rows_as_map = RowsAsMap
     } = Config,
     {SslActivated, SslOptions} = default_ssl_options(Host, Ssl),
     Options1 = #{
@@ -73,7 +72,6 @@ connect(Config) ->
         idle_interval => IdleInterval,
         trace => Trace,
         decode_opts => [{return_rows_as_maps, RowsAsMap}],
-        pool_options => [{timeout, DefaultTimeout}],
         socket_options => case IpVersion of
             ipv4 -> [];
             ipv6 -> [inet6]
@@ -106,12 +104,10 @@ transaction(#pog_pool{name = Name} = Conn, Callback) ->
 
 
 query(#pog_pool{name = Name}, Sql, Arguments, Timeout) ->
-    Options = case Timeout of
-        none -> 
-            #{pool => Name};
-        {some, QueryTimeout} -> 
-            #{pool => Name, pool_options => [{timeout, QueryTimeout}]}
-    end,
+    Options = #{
+        pool => Name,
+        pool_options => [{timeout, Timeout}]
+    },
     Res = pgo:query(Sql, Arguments, Options),
     case Res of
         #{rows := Rows, num_rows := NumRows} ->
