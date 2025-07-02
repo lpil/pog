@@ -6,10 +6,13 @@
 
 import gleam/dynamic.{type Dynamic}
 import gleam/dynamic/decode.{type Decoder}
+import gleam/erlang/process.{type Name, type Pid, type Subject}
 import gleam/float
 import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
+import gleam/otp/actor
+import gleam/otp/supervision
 import gleam/result
 import gleam/string
 import gleam/time/calendar.{type Date, type TimeOfDay}
@@ -18,9 +21,13 @@ import gleam/uri.{Uri}
 /// The port that will be used when none is specified.
 const default_port: Int = 5432
 
+pub type Message
+
 /// The configuration for a pool of connections.
 pub type Config {
   Config(
+    /// The Erlang name to register the pool with.
+    pool_name: Name(Message),
     /// (default: 127.0.0.1): Database server hostname.
     host: String,
     /// (default: 5432): Port the server is listening on.
@@ -195,8 +202,9 @@ pub type IpVersion {
 /// The default configuration for a connection pool, with a single connection.
 /// You will likely want to increase the size of the pool for your application.
 ///
-pub fn default_config() -> Config {
+pub fn default_config(pool_name pool_name: Name(Message)) -> Config {
   Config(
+    pool_name:,
     host: "127.0.0.1",
     port: default_port,
     database: "postgres",
@@ -215,7 +223,10 @@ pub fn default_config() -> Config {
 }
 
 /// Parse a database url into configuration that can be used to start a pool.
-pub fn url_config(database_url: String) -> Result(Config, Nil) {
+pub fn url_config(
+  name: Name(Message),
+  database_url: String,
+) -> Result(Config, Nil) {
   use uri <- result.try(uri.parse(database_url))
   let uri = case uri.port {
     Some(_) -> uri
@@ -244,7 +255,7 @@ pub fn url_config(database_url: String) -> Result(Config, Nil) {
     ["", database] ->
       Ok(
         Config(
-          ..default_config(),
+          ..default_config(name),
           host: host,
           port: db_port,
           database: database,
@@ -294,25 +305,37 @@ fn extract_ssl_mode(query: option.Option(String)) -> Result(Ssl, Nil) {
   }
 }
 
-/// A pool of one or more database connections against which queries can be
-/// made.
-///
-/// Created using the `connect` function and shut-down with the `disconnect`
-/// function.
-pub type Connection
-
-/// Start a database connection pool.
+/// Start a database connection pool. Most the time you want to use
+/// `supervised` and add the pool to your supervision tree instead of using this
+/// function directly.
 ///
 /// The pool is started in a new process and will asynchronously connect to the
 /// PostgreSQL instance specified in the config. If the configuration is invalid
 /// or it cannot connect for another reason it will continue to attempt to
 /// connect, and any queries made using the connection pool will fail.
-@external(erlang, "pog_ffi", "connect")
-pub fn connect(a: Config) -> Connection
+///
+pub fn start(config: Config) -> actor.StartResult(Subject(Message)) {
+  case start_tree(config) {
+    Ok(pid) -> Ok(actor.Started(pid, process.named_subject(config.pool_name)))
+    Error(reason) -> Error(actor.InitExited(process.Abnormal(reason)))
+  }
+}
 
-/// Shut down a connection pool.
-@external(erlang, "pog_ffi", "disconnect")
-pub fn disconnect(a: Connection) -> Nil
+@external(erlang, "pog_ffi", "start")
+fn start_tree(config: Config) -> Result(Pid, dynamic.Dynamic)
+
+/// Start a database connection pool by adding it to your supervision tree.
+///
+/// The pool is started in a new process and will asynchronously connect to the
+/// PostgreSQL instance specified in the config. If the configuration is invalid
+/// or it cannot connect for another reason it will continue to attempt to
+/// connect, and any queries made using the connection pool will fail.
+///
+pub fn supervised(
+  config: Config,
+) -> supervision.ChildSpecification(Subject(Message)) {
+  supervision.supervisor(fn() { start(config) })
+}
 
 /// A value that can be sent to PostgreSQL as one of the arguments to a
 /// parameterised SQL query.
@@ -385,8 +408,8 @@ pub type TransactionError {
 /// back.
 @external(erlang, "pog_ffi", "transaction")
 pub fn transaction(
-  pool: Connection,
-  callback: fn(Connection) -> Result(t, String),
+  pool: Subject(Message),
+  callback: fn(Subject(Message)) -> Result(t, String),
 ) -> Result(t, TransactionError)
 
 pub fn nullable(inner_type: fn(a) -> Value, value: Option(a)) -> Value {
@@ -403,7 +426,7 @@ pub type Returned(t) {
 
 @external(erlang, "pog_ffi", "query")
 fn run_query(
-  a: Connection,
+  a: Name(Message),
   b: String,
   c: List(Value),
   timeout: Int,
@@ -478,9 +501,13 @@ pub fn timeout(query: Query(t1), timeout: Int) -> Query(t1) {
 ///
 pub fn execute(
   query query: Query(t),
-  on pool: Connection,
+  on pool: Subject(Message),
 ) -> Result(Returned(t), QueryError) {
   let parameters = list.reverse(query.parameters)
+  use pool <- result.try(
+    process.subject_name(pool)
+    |> result.replace_error(ConnectionUnavailable),
+  )
   use #(count, rows) <- result.try(run_query(
     pool,
     query.sql,
