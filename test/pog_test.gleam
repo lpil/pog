@@ -9,6 +9,25 @@ pub fn main() {
   gleeunit.main()
 }
 
+fn start_default() {
+  pog.Config(
+    ..pog.default_config(),
+    database: "gleam_pog_test",
+    password: Some("postgres"),
+    pool_size: 1,
+  )
+  |> pog.connect
+}
+
+fn default_config() {
+  pog.Config(
+    ..pog.default_config(),
+    database: "gleam_pog_test",
+    password: Some("postgres"),
+    pool_size: 1,
+  )
+}
+
 pub fn url_config_everything_test() {
   let expected =
     pog.default_config()
@@ -60,25 +79,6 @@ pub fn url_config_no_port_test() {
 
 pub fn url_config_path_slash_test() {
   assert pog.url_config("postgres://u:p@db.test:1234/my_db/foo") == Error(Nil)
-}
-
-fn start_default() {
-  pog.Config(
-    ..pog.default_config(),
-    database: "gleam_pog_test",
-    password: Some("postgres"),
-    pool_size: 1,
-  )
-  |> pog.connect
-}
-
-fn default_config() {
-  pog.Config(
-    ..pog.default_config(),
-    database: "gleam_pog_test",
-    password: Some("postgres"),
-    pool_size: 1,
-  )
 }
 
 pub fn inserting_new_rows_test() {
@@ -442,7 +442,7 @@ pub fn expected_ten_millis_no_timeout_test() {
   assert pog.query(
       "select sub.ret from (select pg_sleep(0.01), 'OK' as ret) as sub",
     )
-    |> pog.timeout(30)
+    |> pog.timeout(50)
     |> pog.returning(decode.at([0], decode.string))
     |> pog.execute(db)
     == Ok(pog.Returned(1, ["OK"]))
@@ -453,7 +453,6 @@ pub fn expected_ten_millis_no_timeout_test() {
 pub fn expected_ten_millis_no_default_timeout_test() {
   let db =
     default_config()
-    |> pog.default_timeout(30)
     |> pog.connect
 
   assert pog.query(

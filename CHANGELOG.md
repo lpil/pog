@@ -3,6 +3,7 @@
 ## v4.0.0 - Unreleased
 
 - `connect` and `disconnect` have been removed in favour of `start` and `supervised`.
+- The `default_timeout` function has been removed.
 - TODO: more flexible transactions.
 - TODO: date functions changed.
 
