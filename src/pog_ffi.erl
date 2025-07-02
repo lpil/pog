@@ -1,8 +1,6 @@
 -module(pog_ffi).
 
--export([query/4, connect/1, disconnect/1, coerce/1, null/0, transaction/2]).
-
--record(pog_pool, {name, pid}).
+-export([query/4, start/1, coerce/1, null/0, transaction/2]).
 
 -include_lib("pog/include/pog_Config.hrl").
 -include_lib("pg_types/include/pg_types.hrl").
@@ -38,10 +36,9 @@ default_ssl_options(Host, Ssl) ->
     ]}
   end.
 
-connect(Config) ->
-    Id = integer_to_list(erlang:unique_integer([positive])),
-    PoolName = list_to_atom("pog_pool_" ++ Id),
+start(Config) ->
     #config{
+        pool_name = PoolName,
         host = Host,
         port = Port,
         database = Database,
@@ -81,31 +78,26 @@ connect(Config) ->
         {some, Pw} -> maps:put(password, Pw, Options1);
         none -> Options1
     end,
-    {ok, Pid} = pgo_pool:start_link(PoolName, Options2),
-    #pog_pool{name = PoolName, pid = Pid}.
+    pgo_pool:start_link(PoolName, Options2).
 
-disconnect(#pog_pool{pid = Pid}) ->
-    erlang:exit(Pid, normal),
-    nil.
-
-transaction(#pog_pool{name = Name} = Conn, Callback) ->
+transaction(Pool, Callback) when is_atom(Pool) ->
     F = fun() ->
-        case Callback(Conn) of
+        case Callback(Pool) of
             {ok, T} -> {ok, T};
             {error, Reason} -> error({pog_rollback_transaction, Reason})
         end
     end,
     try
-        pgo:transaction(Name, F, #{})
+        pgo:transaction(Pool, F, #{})
     catch
         error:{pog_rollback_transaction, Reason} ->
             {error, {transaction_rolled_back, Reason}}
     end.
 
 
-query(#pog_pool{name = Name}, Sql, Arguments, Timeout) ->
+query(Pool, Sql, Arguments, Timeout) when is_atom(Pool) ->
     Options = #{
-        pool => Name,
+        pool => Pool,
         pool_options => [{timeout, Timeout}]
     },
     Res = pgo:query(Sql, Arguments, Options),
