@@ -21,4 +21,4 @@ gleam_otp = { version = ">= 1.0.0 and < 2.0.0" }
 gleam_stdlib = { version = ">= 0.51.0 and < 2.0.0" }
 gleam_time = { version = ">= 1.0.0 and < 2.0.0" }
 gleeunit = { version = ">= 1.0.0 and < 2.0.0" }
-pgo = { version = ">= 0.12.0 and < 2.0.0" }
+pgo = { version = ">= 0.14.0 and < 1.0.0" }

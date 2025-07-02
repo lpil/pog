@@ -2,6 +2,9 @@
 ////
 //// Gleam wrapper around pgo library
 
+// TODO: Connection is a union of the name and the checked out connection
+// TODO: Move handling of this into Gleam to make it easier to write
+
 // TODO: add time and timestamp with zone once pgo supports them
 
 import gleam/dynamic.{type Dynamic}
@@ -406,9 +409,14 @@ pub type TransactionError {
 ///
 /// If the function returns an `Error` or panics then the transaction is rolled
 /// back.
-@external(erlang, "pog_ffi", "transaction")
 pub fn transaction(
   pool: Subject(Message),
+  callback: fn(Subject(Message)) -> Result(t, String),
+) -> Result(t, TransactionError)
+
+@external(erlang, "pog_ffi", "transaction")
+fn run_transaction(
+  pool: Name(Message),
   callback: fn(Subject(Message)) -> Result(t, String),
 ) -> Result(t, TransactionError)
 
