@@ -2,24 +2,35 @@
 ////
 //// Gleam wrapper around pgo library
 
+// TODO: Connection is a union of the name and the checked out connection
+// TODO: Move handling of this into Gleam to make it easier to write
+
 // TODO: add time and timestamp with zone once pgo supports them
 
 import gleam/dynamic.{type Dynamic}
 import gleam/dynamic/decode.{type Decoder}
+import gleam/erlang/process.{type Name, type Pid, type Subject}
 import gleam/float
 import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
+import gleam/otp/actor
+import gleam/otp/supervision
 import gleam/result
 import gleam/string
+import gleam/time/calendar.{type Date, type TimeOfDay}
 import gleam/uri.{Uri}
 
 /// The port that will be used when none is specified.
 const default_port: Int = 5432
 
+pub type Message
+
 /// The configuration for a pool of connections.
 pub type Config {
   Config(
+    /// The Erlang name to register the pool with.
+    pool_name: Name(Message),
     /// (default: 127.0.0.1): Database server hostname.
     host: String,
     /// (default: 5432): Port the server is listening on.
@@ -58,9 +69,6 @@ pub type Config {
     /// (default: False) By default, pgo will return a n-tuple, in the order of the query.
     /// By setting `rows_as_map` to `True`, the result will be `Dict`.
     rows_as_map: Bool,
-    /// (default: 5000): Default time in milliseconds to wait before the query
-    /// is considered timeout. Timeout can be edited per query.
-    default_timeout: Int,
   )
 }
 
@@ -125,10 +133,10 @@ pub fn connection_parameter(
   name name: String,
   value value: String,
 ) -> Config {
-  Config(
-    ..config,
-    connection_parameters: [#(name, value), ..config.connection_parameters],
-  )
+  Config(..config, connection_parameters: [
+    #(name, value),
+    ..config.connection_parameters
+  ])
 }
 
 /// Number of connections to keep open with the database
@@ -186,13 +194,6 @@ pub fn rows_as_map(config: Config, rows_as_map: Bool) -> Config {
   Config(..config, rows_as_map:)
 }
 
-/// By default, pog have a default value of 5000ms as timeout.
-/// By setting `default_timeout`, every queries will now use that timeout.
-/// The timeout is given in milliseconds.
-pub fn default_timeout(config: Config, default_timeout: Int) -> Config {
-  Config(..config, default_timeout:)
-}
-
 /// The internet protocol version to use.
 pub type IpVersion {
   /// Internet Protocol version 4 (IPv4)
@@ -204,8 +205,9 @@ pub type IpVersion {
 /// The default configuration for a connection pool, with a single connection.
 /// You will likely want to increase the size of the pool for your application.
 ///
-pub fn default_config() -> Config {
+pub fn default_config(pool_name pool_name: Name(Message)) -> Config {
   Config(
+    pool_name:,
     host: "127.0.0.1",
     port: default_port,
     database: "postgres",
@@ -220,18 +222,20 @@ pub fn default_config() -> Config {
     trace: False,
     ip_version: Ipv4,
     rows_as_map: False,
-    default_timeout: 5000,
   )
 }
 
 /// Parse a database url into configuration that can be used to start a pool.
-pub fn url_config(database_url: String) -> Result(Config, Nil) {
-  use uri <- result.then(uri.parse(database_url))
+pub fn url_config(
+  name: Name(Message),
+  database_url: String,
+) -> Result(Config, Nil) {
+  use uri <- result.try(uri.parse(database_url))
   let uri = case uri.port {
     Some(_) -> uri
     None -> Uri(..uri, port: Some(default_port))
   }
-  use #(userinfo, host, path, db_port, query) <- result.then(case uri {
+  use #(userinfo, host, path, db_port, query) <- result.try(case uri {
     Uri(
       scheme: Some(scheme),
       userinfo: Some(userinfo),
@@ -248,13 +252,13 @@ pub fn url_config(database_url: String) -> Result(Config, Nil) {
     }
     _ -> Error(Nil)
   })
-  use #(user, password) <- result.then(extract_user_password(userinfo))
-  use ssl <- result.then(extract_ssl_mode(query))
+  use #(user, password) <- result.try(extract_user_password(userinfo))
+  use ssl <- result.try(extract_ssl_mode(query))
   case string.split(path, "/") {
     ["", database] ->
       Ok(
         Config(
-          ..default_config(),
+          ..default_config(name),
           host: host,
           port: db_port,
           database: database,
@@ -279,16 +283,21 @@ fn extract_user_password(
 }
 
 /// Expects `sslmode` to be `require`, `verify-ca`, `verify-full` or `disable`.
+///
 /// If `sslmode` is set, but not one of those value, fails.
+///
 /// If `sslmode` is `verify-ca` or `verify-full`, returns `SslVerified`.
+///
 /// If `sslmode` is `require`, returns `SslUnverified`.
+///
 /// If `sslmode` is unset, returns `SslDisabled`.
+///
 fn extract_ssl_mode(query: option.Option(String)) -> Result(Ssl, Nil) {
   case query {
     option.None -> Ok(SslDisabled)
     option.Some(query) -> {
-      use query <- result.then(uri.parse_query(query))
-      use sslmode <- result.then(list.key_find(query, "sslmode"))
+      use query <- result.try(uri.parse_query(query))
+      use sslmode <- result.try(list.key_find(query, "sslmode"))
       case sslmode {
         "require" -> Ok(SslUnverified)
         "verify-ca" | "verify-full" -> Ok(SslVerified)
@@ -299,25 +308,37 @@ fn extract_ssl_mode(query: option.Option(String)) -> Result(Ssl, Nil) {
   }
 }
 
-/// A pool of one or more database connections against which queries can be
-/// made.
-///
-/// Created using the `connect` function and shut-down with the `disconnect`
-/// function.
-pub type Connection
-
-/// Start a database connection pool.
+/// Start a database connection pool. Most the time you want to use
+/// `supervised` and add the pool to your supervision tree instead of using this
+/// function directly.
 ///
 /// The pool is started in a new process and will asynchronously connect to the
 /// PostgreSQL instance specified in the config. If the configuration is invalid
 /// or it cannot connect for another reason it will continue to attempt to
 /// connect, and any queries made using the connection pool will fail.
-@external(erlang, "pog_ffi", "connect")
-pub fn connect(a: Config) -> Connection
+///
+pub fn start(config: Config) -> actor.StartResult(Subject(Message)) {
+  case start_tree(config) {
+    Ok(pid) -> Ok(actor.Started(pid, process.named_subject(config.pool_name)))
+    Error(reason) -> Error(actor.InitExited(process.Abnormal(reason)))
+  }
+}
 
-/// Shut down a connection pool.
-@external(erlang, "pog_ffi", "disconnect")
-pub fn disconnect(a: Connection) -> Nil
+@external(erlang, "pog_ffi", "start")
+fn start_tree(config: Config) -> Result(Pid, dynamic.Dynamic)
+
+/// Start a database connection pool by adding it to your supervision tree.
+///
+/// The pool is started in a new process and will asynchronously connect to the
+/// PostgreSQL instance specified in the config. If the configuration is invalid
+/// or it cannot connect for another reason it will continue to attempt to
+/// connect, and any queries made using the connection pool will fail.
+///
+pub fn supervised(
+  config: Config,
+) -> supervision.ChildSpecification(Subject(Message)) {
+  supervision.supervisor(fn() { start(config) })
+}
 
 /// A value that can be sent to PostgreSQL as one of the arguments to a
 /// parameterised SQL query.
@@ -346,17 +367,31 @@ pub fn array(converter: fn(a) -> Value, values: List(a)) -> Value {
   |> coerce_value
 }
 
-pub fn timestamp(timestamp: Timestamp) -> Value {
-  coerce_value(#(date(timestamp.date), time(timestamp.time)))
+pub fn calendar_datetime(date: Date, time: TimeOfDay) -> Value {
+  coerce_value(#(calendar_date(date), calendar_time_of_day(time)))
 }
 
-pub fn date(date: Date) -> Value {
-  coerce_value(#(date.year, date.month, date.day))
+pub fn calendar_date(date: Date) -> Value {
+  let month = case date.month {
+    calendar.January -> 1
+    calendar.February -> 2
+    calendar.March -> 3
+    calendar.April -> 4
+    calendar.May -> 5
+    calendar.June -> 6
+    calendar.July -> 7
+    calendar.August -> 8
+    calendar.September -> 9
+    calendar.October -> 10
+    calendar.November -> 11
+    calendar.December -> 12
+  }
+  coerce_value(#(date.year, month, date.day))
 }
 
-pub fn time(time: Time) -> Value {
+pub fn calendar_time_of_day(time: TimeOfDay) -> Value {
   let seconds = int.to_float(time.seconds)
-  let seconds = seconds +. int.to_float(time.microseconds) /. 1_000_000.0
+  let seconds = seconds +. int.to_float(time.nanoseconds) /. 1_000_000_000.0
   coerce_value(#(time.hours, time.minutes, seconds))
 }
 
@@ -374,10 +409,15 @@ pub type TransactionError {
 ///
 /// If the function returns an `Error` or panics then the transaction is rolled
 /// back.
-@external(erlang, "pog_ffi", "transaction")
 pub fn transaction(
-  pool: Connection,
-  callback: fn(Connection) -> Result(t, String),
+  pool: Subject(Message),
+  callback: fn(Subject(Message)) -> Result(t, String),
+) -> Result(t, TransactionError)
+
+@external(erlang, "pog_ffi", "transaction")
+fn run_transaction(
+  pool: Name(Message),
+  callback: fn(Subject(Message)) -> Result(t, String),
 ) -> Result(t, TransactionError)
 
 pub fn nullable(inner_type: fn(a) -> Value, value: Option(a)) -> Value {
@@ -394,10 +434,10 @@ pub type Returned(t) {
 
 @external(erlang, "pog_ffi", "query")
 fn run_query(
-  a: Connection,
+  a: Name(Message),
   b: String,
   c: List(Value),
-  timeout: Option(Int),
+  timeout: Int,
 ) -> Result(#(Int, List(Dynamic)), QueryError)
 
 pub type QueryError {
@@ -427,7 +467,7 @@ pub opaque type Query(row_type) {
     sql: String,
     parameters: List(Value),
     row_decoder: Decoder(row_type),
-    timeout: option.Option(Int),
+    timeout: Int,
   )
 }
 
@@ -435,12 +475,7 @@ pub opaque type Query(row_type) {
 /// functions.
 ///
 pub fn query(sql: String) -> Query(Nil) {
-  Query(
-    sql:,
-    parameters: [],
-    row_decoder: decode.success(Nil),
-    timeout: option.None,
-  )
+  Query(sql:, parameters: [], row_decoder: decode.success(Nil), timeout: 5000)
 }
 
 /// Set the decoder to use for the type of row returned by executing this
@@ -460,27 +495,34 @@ pub fn parameter(query: Query(t1), parameter: Value) -> Query(t1) {
   Query(..query, parameters: [parameter, ..query.parameters])
 }
 
-/// Use a custom timeout for the query. This timeout will take precedence over
+/// Use a custom timeout for the query, in milliseconds.
 /// the default connection timeout.
-/// The timeout is given in milliseconds.
+///
+/// If this function is not used to give a timeout then default of 5000 ms is
+/// used.
+///
 pub fn timeout(query: Query(t1), timeout: Int) -> Query(t1) {
-  Query(..query, timeout: Some(timeout))
+  Query(..query, timeout:)
 }
 
 /// Run a query against a PostgreSQL database.
 ///
 pub fn execute(
   query query: Query(t),
-  on pool: Connection,
+  on pool: Subject(Message),
 ) -> Result(Returned(t), QueryError) {
   let parameters = list.reverse(query.parameters)
-  use #(count, rows) <- result.then(run_query(
+  use pool <- result.try(
+    process.subject_name(pool)
+    |> result.replace_error(ConnectionUnavailable),
+  )
+  use #(count, rows) <- result.try(run_query(
     pool,
     query.sql,
     parameters,
     query.timeout,
   ))
-  use rows <- result.then(
+  use rows <- result.try(
     list.try_map(over: rows, with: decode.run(_, query.row_decoder))
     |> result.map_error(UnexpectedResultType),
   )
@@ -760,24 +802,39 @@ pub fn error_code_name(error_code: String) -> Result(String, Nil) {
   }
 }
 
-pub fn timestamp_decoder() -> decode.Decoder(Timestamp) {
-  use date <- decode.field(0, date_decoder())
-  use time <- decode.field(1, time_decoder())
-  decode.success(Timestamp(date, time))
+pub fn calendar_datetime_decoder() -> decode.Decoder(#(Date, TimeOfDay)) {
+  use date <- decode.field(0, calendar_date_decoder())
+  use time <- decode.field(1, calendar_time_of_day_decoder())
+  decode.success(#(date, time))
 }
 
-pub fn date_decoder() -> decode.Decoder(Date) {
+pub fn calendar_date_decoder() -> decode.Decoder(Date) {
   use year <- decode.field(0, decode.int)
   use month <- decode.field(1, decode.int)
   use day <- decode.field(2, decode.int)
-  decode.success(Date(year:, month:, day:))
+  let date = fn(month) { decode.success(calendar.Date(year:, month:, day:)) }
+  case month {
+    1 -> date(calendar.January)
+    2 -> date(calendar.February)
+    3 -> date(calendar.March)
+    4 -> date(calendar.April)
+    5 -> date(calendar.May)
+    6 -> date(calendar.June)
+    7 -> date(calendar.July)
+    8 -> date(calendar.August)
+    9 -> date(calendar.September)
+    10 -> date(calendar.October)
+    11 -> date(calendar.November)
+    12 -> date(calendar.December)
+    _ -> decode.failure(calendar.Date(0, calendar.January, 1), "Calendar date")
+  }
 }
 
-pub fn time_decoder() -> decode.Decoder(Time) {
+pub fn calendar_time_of_day_decoder() -> decode.Decoder(TimeOfDay) {
   use hours <- decode.field(0, decode.int)
   use minutes <- decode.field(1, decode.int)
-  use #(seconds, microseconds) <- decode.field(2, seconds_decoder())
-  decode.success(Time(hours:, minutes:, seconds:, microseconds:))
+  use #(seconds, nanoseconds) <- decode.field(2, seconds_decoder())
+  decode.success(calendar.TimeOfDay(hours:, minutes:, seconds:, nanoseconds:))
 }
 
 fn seconds_decoder() -> decode.Decoder(#(Int, Int)) {
@@ -790,21 +847,9 @@ fn seconds_decoder() -> decode.Decoder(#(Int, Int)) {
     |> decode.map(fn(f) {
       let floored = float.floor(f)
       let seconds = float.round(floored)
-      let microseconds = float.round({ f -. floored } *. 1_000_000.0)
+      let microseconds = float.round({ f -. floored } *. 1_000_000_000.0)
       #(seconds, microseconds)
     })
   }
   decode.one_of(int, [float])
-}
-
-pub type Date {
-  Date(year: Int, month: Int, day: Int)
-}
-
-pub type Time {
-  Time(hours: Int, minutes: Int, seconds: Int, microseconds: Int)
-}
-
-pub type Timestamp {
-  Timestamp(date: Date, time: Time)
 }

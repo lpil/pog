@@ -1,8 +1,6 @@
 -module(pog_ffi).
 
--export([query/4, connect/1, disconnect/1, coerce/1, null/0, transaction/2]).
-
--record(pog_pool, {name, pid, default_timeout}).
+-export([query/4, start/1, coerce/1, null/0, transaction/2]).
 
 -include_lib("pog/include/pog_Config.hrl").
 -include_lib("pg_types/include/pg_types.hrl").
@@ -38,10 +36,9 @@ default_ssl_options(Host, Ssl) ->
     ]}
   end.
 
-connect(Config) ->
-    Id = integer_to_list(erlang:unique_integer([positive])),
-    PoolName = list_to_atom("pog_pool_" ++ Id),
+start(Config) ->
     #config{
+        pool_name = PoolName,
         host = Host,
         port = Port,
         database = Database,
@@ -55,8 +52,7 @@ connect(Config) ->
         idle_interval = IdleInterval,
         trace = Trace,
         ip_version = IpVersion,
-        rows_as_map = RowsAsMap,
-        default_timeout = DefaultTimeout
+        rows_as_map = RowsAsMap
     } = Config,
     {SslActivated, SslOptions} = default_ssl_options(Host, Ssl),
     Options1 = #{
@@ -82,34 +78,57 @@ connect(Config) ->
         {some, Pw} -> maps:put(password, Pw, Options1);
         none -> Options1
     end,
-    {ok, Pid} = pgo_pool:start_link(PoolName, Options2),
-    #pog_pool{name = PoolName, pid = Pid, default_timeout = DefaultTimeout}.
+    pgo_pool:start_link(PoolName, Options2).
 
-disconnect(#pog_pool{pid = Pid}) ->
-    erlang:exit(Pid, normal),
-    nil.
-
-transaction(#pog_pool{name = Name} = Conn, Callback) ->
+old_transaction(Pool, Callback) when is_atom(Pool) ->
     F = fun() ->
-        case Callback(Conn) of
+        case Callback(Pool) of
             {ok, T} -> {ok, T};
             {error, Reason} -> error({pog_rollback_transaction, Reason})
         end
     end,
     try
-        pgo:transaction(Name, F, #{})
+        pgo:transaction(Pool, F, #{})
     catch
         error:{pog_rollback_transaction, Reason} ->
             {error, {transaction_rolled_back, Reason}}
     end.
 
 
-query(#pog_pool{name = Name, default_timeout = DefaultTimeout}, Sql, Arguments, Timeout) ->
-    Timeout1 = case Timeout of
-      none -> DefaultTimeout;
-      {some, QueryTimeout} -> QueryTimeout
+transaction(Pool, Fun) when is_atom(Pool) andalso is_function(Fun, 1) ->
+    Exec = fun(Conn, Sql) ->
+        pgo_handler:extended_query(Conn, Sql, [], #{queue_time => undefined})
     end,
-    Options = #{pool => Name, pool_options => [{timeout, Timeout1}]},
+    case pgo:checkout(Pool) of
+        {ok, Ref, Conn} ->
+            try
+               #{command := 'begin'} = Exec(Conn, "BEGIN"),
+               Result = Fun(),
+               case Exec(Conn, "COMMIT") of
+                   #{command := commit} -> Result;
+                   #{command := rollback} -> Result
+               end
+            catch
+                Type:Reason:Stacktrace ->
+                Exec(Conn, "ROLLBACK"),
+                erlang:raise(Type, Reason, Stacktrace)
+            after
+                pgo:checkin(Ref, Conn)
+            end;
+        {error, _} = Error ->
+            Error
+    end;
+% TODO: remove
+transaction(A, B) ->
+    erlang:display(A),
+    erlang:display(B),
+    erlang:raise(badarg).
+
+query(Pool, Sql, Arguments, Timeout) when is_atom(Pool) ->
+    Options = #{
+        pool => Pool,
+        pool_options => [{timeout, Timeout}]
+    },
     Res = pgo:query(Sql, Arguments, Options),
     case Res of
         #{rows := Rows, num_rows := NumRows} ->

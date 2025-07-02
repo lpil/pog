@@ -5,20 +5,45 @@ A PostgreSQL database client for Gleam, based on [PGO][erlang-pgo].
 [erlang-pgo]: https://github.com/erleans/pgo
 
 ```gleam
-import pog
-import gleam/dynamic/decode
-import gleeunit/should
+gleam add pog@4
+```
 
-pub fn main() {
-  // Start a database connection pool.
-  // Typically you will want to create one pool for use in your program
-  let db =
-    pog.default_config()
+Add a pool to your OTP supervision tree, before any siblings that will need to
+use the database.
+
+Pools are named with a `Name` from `gleam/erlang/process`, so create one
+outside of your supervision tree and pass it down to the creation of the pool.
+
+```gleam
+import gleam/otp/static_supervisor
+import pog
+
+pub fn start_application_supervisor(pool_name: process.Name(pog.Message)) {
+  let pool_child = 
+    pog.defaut_config(pool_name)
     |> pog.host("localhost")
     |> pog.database("my_database")
     |> pog.pool_size(15)
-    |> pog.connect
+    |> pog.supervised
 
+  supervisor.new(supervisor.RestForOne)
+  |> supervisor.add(pool_child)
+  // |> supervisor.add(other)
+  // |> supervisor.add(application)
+  // |> supervisor.add(children)
+  |> supervisor.start
+}
+```
+
+Then in your application you can use a subject created from that name to make
+queries:
+
+```gleam
+import pog
+import gleam/dynamic/decode
+import gleam/erlang/process.{type Subject}
+
+pub fn run(db: Subject(pog.Message)) {
   // An SQL statement to run. It takes one int as a parameter
   let sql_query = "
   select
@@ -39,26 +64,16 @@ pub fn main() {
 
   // Run the query against the PostgreSQL database
   // The int `1` is given as a parameter
-  let assert Ok(response) =
+  let assert Ok(data) =
     pog.query(sql_query)
     |> pog.parameter(pog.int(1))
     |> pog.returning(row_decoder)
     |> pog.execute(db)
 
   // And then do something with the returned results
-  response.count
-  |> should.equal(2)
-  response.rows
-  |> should.equal([
-    #("Nubi", 3, "black", ["Al", "Cutlass"]),
-  ])
+  assert data.count == 2
+  assert data.rows == [#("Nubi", 3, "black", ["Al", "Cutlass"])])
 }
-```
-
-## Installation
-
-```sh
-gleam add pog
 ```
 
 ## Support of connection URI
@@ -81,10 +96,9 @@ import pog
 /// Read the DATABASE_URL environment variable.
 /// Generate the pog.Config from that database URL.
 /// Finally, connect to database.
-pub fn read_connection_uri() -> Result(pog.Connection, Nil) {
+pub fn read_connection_uri(name) -> Result(pog.Config, Nil) {
   use database_url <- result.try(envoy.get("DATABASE_URL"))
-  use config <- result.try(pog.url_config(database_url))
-  Ok(pog.connect(config))
+  pog.url_config(name, database_url)
 }
 ```
 
@@ -111,15 +125,6 @@ that behaviour specifically for that one.
 By default, `pgo` will return every selected value from your query as a tuple.
 In case you want a different output, you can activate `rows_as_maps` in `Config`.
 Once activated, every returned rows will take the form of a `Dict`.
-
-## Atom generation
-
-Creating a connection pool with the `pog.connect` function dynamically generates
-an Erlang atom. Atoms are not garbage collected and only a certain number of
-them can exist in an Erlang VM instance, and hitting this limit will result in
-the VM crashing. Due to this limitation you should not dynamically open new
-connection pools, instead create the pools you need when your application starts
-and reuse them throughout the lifetime of your program.
 
 ## SSL
 
@@ -171,16 +176,6 @@ in `pog.Config`. The different options are `SslDisabled`, `SslUnverified` &
 `SslVerified`. Because of the nature of the 3 modes of SSL, and because talking
 to your database should be highly secured to protect you against man-in-the-middle
 attacks, you should always try to use the most secured setting.
-
-```gleam
-import pog
-
-pub fn connect() {
-  pog.default_config()
-  |> pog.ssl(pog.SslVerified)
-  |> pog.connect
-}
-```
 
 ### Need some help?
 
