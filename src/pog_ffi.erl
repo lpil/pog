@@ -80,7 +80,7 @@ start(Config) ->
     end,
     pgo_pool:start_link(PoolName, Options2).
 
-transaction(Pool, Callback) when is_atom(Pool) ->
+old_transaction(Pool, Callback) when is_atom(Pool) ->
     F = fun() ->
         case Callback(Pool) of
             {ok, T} -> {ok, T};
@@ -94,6 +94,35 @@ transaction(Pool, Callback) when is_atom(Pool) ->
             {error, {transaction_rolled_back, Reason}}
     end.
 
+
+transaction(Pool, Fun) when is_atom(Pool) andalso is_function(Fun, 1) ->
+    Exec = fun(Conn, Sql) ->
+        pgo_handler:extended_query(Conn, Sql, [], #{queue_time => undefined})
+    end,
+    case pgo:checkout(Pool) of
+        {ok, Ref, Conn} ->
+            try
+               #{command := 'begin'} = Exec(Conn, "BEGIN"),
+               Result = Fun(),
+               case Exec(Conn, "COMMIT") of
+                   #{command := commit} -> Result;
+                   #{command := rollback} -> Result
+               end
+            catch
+                Type:Reason:Stacktrace ->
+                Exec(Conn, "ROLLBACK"),
+                erlang:raise(Type, Reason, Stacktrace)
+            after
+                pgo:checkin(Ref, Conn)
+            end;
+        {error, _} = Error ->
+            Error
+    end;
+% TODO: remove
+transaction(A, B) ->
+    erlang:display(A),
+    erlang:display(B),
+    erlang:raise(badarg).
 
 query(Pool, Sql, Arguments, Timeout) when is_atom(Pool) ->
     Options = #{
