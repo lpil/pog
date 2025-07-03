@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v3.3.0 - 2025-07-03
 
 - Updated `result.then` to `result.try` to resolve deprecation warnings.
 
