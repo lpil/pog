@@ -39,6 +39,7 @@ default_ssl_options(Host, Ssl) ->
   end.
 
 connect(Config) ->
+    application:set_env(pg_types, timestamp_config, integer_system_time_microseconds),
     Id = integer_to_list(erlang:unique_integer([positive])),
     PoolName = list_to_atom("pog_pool_" ++ Id),
     #config{
