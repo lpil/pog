@@ -12,6 +12,10 @@ import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
+import gleam/time/calendar.{
+  type Date, type Month, type TimeOfDay, Date, TimeOfDay,
+}
+import gleam/time/timestamp.{type Timestamp}
 import gleam/uri.{Uri}
 
 /// The port that will be used when none is specified.
@@ -347,17 +351,23 @@ pub fn array(converter: fn(a) -> Value, values: List(a)) -> Value {
 }
 
 pub fn timestamp(timestamp: Timestamp) -> Value {
-  coerce_value(#(date(timestamp.date), time(timestamp.time)))
+  let #(seconds, nanoseconds) =
+    timestamp.to_unix_seconds_and_nanoseconds(timestamp)
+
+  coerce_value(seconds * 1_000_000 + nanoseconds / 1000)
 }
 
 pub fn date(date: Date) -> Value {
-  coerce_value(#(date.year, date.month, date.day))
+  let Date(year:, month:, day:) = date
+  let month = calendar.month_to_int(month)
+  coerce_value(#(year, month, day))
 }
 
-pub fn time(time: Time) -> Value {
-  let seconds = int.to_float(time.seconds)
-  let seconds = seconds +. int.to_float(time.microseconds) /. 1_000_000.0
-  coerce_value(#(time.hours, time.minutes, seconds))
+pub fn time(time: TimeOfDay) -> Value {
+  let TimeOfDay(hours:, minutes:, seconds:, nanoseconds:) = time
+  let seconds =
+    int.to_float(seconds) +. int.to_float(nanoseconds) /. 1_000_000_000.0
+  coerce_value(#(hours, minutes, seconds))
 }
 
 @external(erlang, "pog_ffi", "coerce")
@@ -761,23 +771,33 @@ pub fn error_code_name(error_code: String) -> Result(String, Nil) {
 }
 
 pub fn timestamp_decoder() -> decode.Decoder(Timestamp) {
-  use date <- decode.field(0, date_decoder())
-  use time <- decode.field(1, time_decoder())
-  decode.success(Timestamp(date, time))
+  use microseconds <- decode.map(decode.int)
+  let seconds = microseconds / 1_000_000
+  let nanoseconds = { microseconds % 1_000_000 } * 1000
+  timestamp.from_unix_seconds_and_nanoseconds(seconds, nanoseconds)
 }
 
 pub fn date_decoder() -> decode.Decoder(Date) {
   use year <- decode.field(0, decode.int)
-  use month <- decode.field(1, decode.int)
+  use month <- decode.field(1, month_decoder())
   use day <- decode.field(2, decode.int)
   decode.success(Date(year:, month:, day:))
 }
 
-pub fn time_decoder() -> decode.Decoder(Time) {
+fn month_decoder() -> decode.Decoder(Month) {
+  use month <- decode.then(decode.int)
+  case calendar.month_from_int(month) {
+    Ok(month) -> decode.success(month)
+    Error(_) -> decode.failure(calendar.October, "Month")
+  }
+}
+
+pub fn time_decoder() -> decode.Decoder(TimeOfDay) {
   use hours <- decode.field(0, decode.int)
   use minutes <- decode.field(1, decode.int)
   use #(seconds, microseconds) <- decode.field(2, seconds_decoder())
-  decode.success(Time(hours:, minutes:, seconds:, microseconds:))
+  let nanoseconds = microseconds * 1000
+  decode.success(TimeOfDay(hours:, minutes:, seconds:, nanoseconds:))
 }
 
 fn seconds_decoder() -> decode.Decoder(#(Int, Int)) {
@@ -795,16 +815,4 @@ fn seconds_decoder() -> decode.Decoder(#(Int, Int)) {
     })
   }
   decode.one_of(int, [float])
-}
-
-pub type Date {
-  Date(year: Int, month: Int, day: Int)
-}
-
-pub type Time {
-  Time(hours: Int, minutes: Int, seconds: Int, microseconds: Int)
-}
-
-pub type Timestamp {
-  Timestamp(date: Date, time: Time)
 }
