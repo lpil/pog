@@ -12,7 +12,9 @@ import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
-import gleam/time/calendar.{type Date, type Month, Date}
+import gleam/time/calendar.{
+  type Date, type Month, type TimeOfDay, Date, TimeOfDay,
+}
 import gleam/time/timestamp.{type Timestamp}
 import gleam/uri.{Uri}
 
@@ -361,10 +363,11 @@ pub fn date(date: Date) -> Value {
   coerce_value(#(year, month, day))
 }
 
-pub fn time(time: Time) -> Value {
-  let seconds = int.to_float(time.seconds)
-  let seconds = seconds +. int.to_float(time.microseconds) /. 1_000_000.0
-  coerce_value(#(time.hours, time.minutes, seconds))
+pub fn time(time: TimeOfDay) -> Value {
+  let TimeOfDay(hours:, minutes:, seconds:, nanoseconds:) = time
+  let seconds =
+    int.to_float(seconds) +. int.to_float(nanoseconds) /. 1_000_000_000.0
+  coerce_value(#(hours, minutes, seconds))
 }
 
 @external(erlang, "pog_ffi", "coerce")
@@ -789,11 +792,12 @@ fn month_decoder() -> decode.Decoder(Month) {
   }
 }
 
-pub fn time_decoder() -> decode.Decoder(Time) {
+pub fn time_decoder() -> decode.Decoder(TimeOfDay) {
   use hours <- decode.field(0, decode.int)
   use minutes <- decode.field(1, decode.int)
   use #(seconds, microseconds) <- decode.field(2, seconds_decoder())
-  decode.success(Time(hours:, minutes:, seconds:, microseconds:))
+  let nanoseconds = microseconds * 1000
+  decode.success(TimeOfDay(hours:, minutes:, seconds:, nanoseconds:))
 }
 
 fn seconds_decoder() -> decode.Decoder(#(Int, Int)) {
@@ -811,8 +815,4 @@ fn seconds_decoder() -> decode.Decoder(#(Int, Int)) {
     })
   }
   decode.one_of(int, [float])
-}
-
-pub type Time {
-  Time(hours: Int, minutes: Int, seconds: Int, microseconds: Int)
 }

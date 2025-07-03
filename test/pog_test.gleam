@@ -378,6 +378,17 @@ pub fn date_test() {
   |> pog.disconnect
 }
 
+pub fn time_test() {
+  start_default()
+  |> assert_roundtrip(
+    TimeOfDay(hours: 11, minutes: 11, seconds: 10, nanoseconds: 2000),
+    "time",
+    pog.time,
+    pog.time_decoder(),
+  )
+  |> pog.disconnect
+}
+
 pub fn nullable_test() {
   start_default()
   |> assert_roundtrip(
