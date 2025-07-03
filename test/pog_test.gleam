@@ -77,13 +77,7 @@ pub fn url_config_path_slash_test() {
 }
 
 fn start_default() {
-  pog.Config(
-    ..pog.default_config(),
-    database: "gleam_pog_test",
-    password: Some("postgres"),
-    pool_size: 1,
-  )
-  |> pog.connect
+  pog.connect(default_config())
 }
 
 fn default_config() {
