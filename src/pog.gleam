@@ -12,6 +12,7 @@ import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
+import gleam/time/timestamp.{type Timestamp}
 import gleam/uri.{Uri}
 
 /// The port that will be used when none is specified.
@@ -347,7 +348,10 @@ pub fn array(converter: fn(a) -> Value, values: List(a)) -> Value {
 }
 
 pub fn timestamp(timestamp: Timestamp) -> Value {
-  coerce_value(#(date(timestamp.date), time(timestamp.time)))
+  let #(seconds, nanoseconds) =
+    timestamp.to_unix_seconds_and_nanoseconds(timestamp)
+
+  coerce_value(seconds * 1_000_000 + nanoseconds / 1000)
 }
 
 pub fn date(date: Date) -> Value {
@@ -761,9 +765,10 @@ pub fn error_code_name(error_code: String) -> Result(String, Nil) {
 }
 
 pub fn timestamp_decoder() -> decode.Decoder(Timestamp) {
-  use date <- decode.field(0, date_decoder())
-  use time <- decode.field(1, time_decoder())
-  decode.success(Timestamp(date, time))
+  use microseconds <- decode.map(decode.int)
+  let seconds = microseconds / 1_000_000
+  let nanoseconds = { microseconds % 1_000_000 } * 1000
+  timestamp.from_unix_seconds_and_nanoseconds(seconds, nanoseconds)
 }
 
 pub fn date_decoder() -> decode.Decoder(Date) {
@@ -803,8 +808,4 @@ pub type Date {
 
 pub type Time {
   Time(hours: Int, minutes: Int, seconds: Int, microseconds: Int)
-}
-
-pub type Timestamp {
-  Timestamp(date: Date, time: Time)
 }

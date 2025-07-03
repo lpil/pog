@@ -1,12 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- The `timestamp` functions now use the `timestamp.Timestamp` type from the
+  `gleam_time` package.
+
 ## v3.3.0 - 2025-07-03
 
 - Updated `result.then` to `result.try` to resolve deprecation warnings.
 
 ## v3.2.0 - 2025-01-16
 
-- The `url_config` function now defaults to port (5432) when port is not specified.
+- The `url_config` function now defaults to port (5432) when port is not
+  specified.
 
 ## v3.1.1 - 2025-01-02
 
@@ -76,8 +82,8 @@
 - Provided functions for handling timestamp values. The `timestamp` function
   coerces a `#(#(Int, Int, Int), #(Int, Int, Int))` value representing
   `#(#(year, month, day), #(hour, minute, second))` into a `Value`. The
-  `decode_timestamp` function can be used to decode a dynamic value returned from
-  the database as a timestamp in the same nested tuple format.
+  `decode_timestamp` function can be used to decode a dynamic value returned
+  from the database as a timestamp in the same nested tuple format.
 
 ## v0.8.0 - 2024-05-20
 

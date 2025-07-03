@@ -1,6 +1,8 @@
 import exception
 import gleam/dynamic/decode.{type Decoder}
 import gleam/option.{None, Some}
+import gleam/time/calendar
+import gleam/time/timestamp
 import gleeunit
 import pog
 
@@ -126,12 +128,14 @@ pub fn inserting_new_rows_and_returning_test() {
 
 pub fn selecting_rows_test() {
   let db = start_default()
-  let sql =
-    "
+  let timestamp_string = "2022-10-10T11:30:30.1Z"
+  let assert Ok(timestamp) = timestamp.parse_rfc3339("2022-10-10T11:30:30.1Z")
+
+  let sql = "
     INSERT INTO
       cats
     VALUES
-      (DEFAULT, 'neo', true, ARRAY ['black'], '2022-10-10 11:30:30.1', '2020-03-04')
+      (DEFAULT, 'neo', true, ARRAY ['black'], '" <> timestamp_string <> "', '2020-03-04')
     RETURNING
       id"
 
@@ -157,14 +161,7 @@ pub fn selecting_rows_test() {
   assert returned.count == 1
   assert returned.rows
     == [
-      #(
-        id,
-        "neo",
-        True,
-        ["black"],
-        pog.Timestamp(pog.Date(2022, 10, 10), pog.Time(11, 30, 30, 100_000)),
-        pog.Date(2020, 3, 4),
-      ),
+      #(id, "neo", True, ["black"], timestamp, pog.Date(2020, 3, 4)),
     ]
 
   pog.disconnect(db)
@@ -358,7 +355,11 @@ pub fn array_test() {
 pub fn datetime_test() {
   start_default()
   |> assert_roundtrip(
-    pog.Timestamp(pog.Date(2022, 10, 12), pog.Time(11, 30, 33, 101)),
+    timestamp.from_calendar(
+      date: calendar.Date(day: 10, month: calendar.October, year: 2022),
+      time: calendar.TimeOfDay(11, 30, 30, 00),
+      offset: calendar.utc_offset,
+    ),
     "timestamp",
     pog.timestamp,
     pog.timestamp_decoder(),
@@ -484,12 +485,14 @@ pub fn expected_ten_millis_no_default_timeout_test() {
 pub fn expected_maps_test() {
   let db = pog.Config(..default_config(), rows_as_map: True) |> pog.connect
 
-  let sql =
-    "
+  let timestamp_string = "2022-10-10T11:30:30Z"
+  let assert Ok(timestamp) = timestamp.parse_rfc3339(timestamp_string)
+
+  let sql = "
     INSERT INTO
       cats
     VALUES
-      (DEFAULT, 'neo', true, ARRAY ['black'], '2022-10-10 11:30:30', '2020-03-04')
+      (DEFAULT, 'neo', true, ARRAY ['black'], '" <> timestamp_string <> "', '2020-03-04')
     RETURNING
       id"
 
@@ -518,14 +521,7 @@ pub fn expected_maps_test() {
   assert returned.count == 1
   assert returned.rows
     == [
-      #(
-        id,
-        "neo",
-        True,
-        ["black"],
-        pog.Timestamp(pog.Date(2022, 10, 10), pog.Time(11, 30, 30, 0)),
-        pog.Date(2020, 3, 4),
-      ),
+      #(id, "neo", True, ["black"], timestamp, pog.Date(2020, 3, 4)),
     ]
 
   pog.disconnect(db)
