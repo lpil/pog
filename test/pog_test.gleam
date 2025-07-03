@@ -1,6 +1,5 @@
 import exception
 import gleam/dynamic/decode.{type Decoder}
-import gleam/erlang/atom
 import gleam/option.{None, Some}
 import gleeunit
 import gleeunit/should
@@ -10,9 +9,12 @@ pub fn main() {
   gleeunit.main()
 }
 
+pub type Timeout(a) {
+  Timeout(time: Int, next: fn() -> a)
+}
+
 pub fn run_with_timeout(time: Int, next: fn() -> a) {
-  let assert Ok(timeout) = atom.from_string("timeout")
-  #(timeout, time, next)
+  Timeout(time, next)
 }
 
 pub fn url_config_everything_test() {
