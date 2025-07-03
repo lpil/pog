@@ -125,10 +125,10 @@ pub fn connection_parameter(
   name name: String,
   value value: String,
 ) -> Config {
-  Config(
-    ..config,
-    connection_parameters: [#(name, value), ..config.connection_parameters],
-  )
+  Config(..config, connection_parameters: [
+    #(name, value),
+    ..config.connection_parameters
+  ])
 }
 
 /// Number of connections to keep open with the database
@@ -226,12 +226,12 @@ pub fn default_config() -> Config {
 
 /// Parse a database url into configuration that can be used to start a pool.
 pub fn url_config(database_url: String) -> Result(Config, Nil) {
-  use uri <- result.then(uri.parse(database_url))
+  use uri <- result.try(uri.parse(database_url))
   let uri = case uri.port {
     Some(_) -> uri
     None -> Uri(..uri, port: Some(default_port))
   }
-  use #(userinfo, host, path, db_port, query) <- result.then(case uri {
+  use #(userinfo, host, path, db_port, query) <- result.try(case uri {
     Uri(
       scheme: Some(scheme),
       userinfo: Some(userinfo),
@@ -248,8 +248,8 @@ pub fn url_config(database_url: String) -> Result(Config, Nil) {
     }
     _ -> Error(Nil)
   })
-  use #(user, password) <- result.then(extract_user_password(userinfo))
-  use ssl <- result.then(extract_ssl_mode(query))
+  use #(user, password) <- result.try(extract_user_password(userinfo))
+  use ssl <- result.try(extract_ssl_mode(query))
   case string.split(path, "/") {
     ["", database] ->
       Ok(
@@ -287,8 +287,8 @@ fn extract_ssl_mode(query: option.Option(String)) -> Result(Ssl, Nil) {
   case query {
     option.None -> Ok(SslDisabled)
     option.Some(query) -> {
-      use query <- result.then(uri.parse_query(query))
-      use sslmode <- result.then(list.key_find(query, "sslmode"))
+      use query <- result.try(uri.parse_query(query))
+      use sslmode <- result.try(list.key_find(query, "sslmode"))
       case sslmode {
         "require" -> Ok(SslUnverified)
         "verify-ca" | "verify-full" -> Ok(SslVerified)
@@ -474,13 +474,13 @@ pub fn execute(
   on pool: Connection,
 ) -> Result(Returned(t), QueryError) {
   let parameters = list.reverse(query.parameters)
-  use #(count, rows) <- result.then(run_query(
+  use #(count, rows) <- result.try(run_query(
     pool,
     query.sql,
     parameters,
     query.timeout,
   ))
-  use rows <- result.then(
+  use rows <- result.try(
     list.try_map(over: rows, with: decode.run(_, query.row_decoder))
     |> result.map_error(UnexpectedResultType),
   )
