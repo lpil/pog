@@ -12,6 +12,7 @@ import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
+import gleam/time/calendar.{type Date, type Month, Date}
 import gleam/time/timestamp.{type Timestamp}
 import gleam/uri.{Uri}
 
@@ -355,7 +356,9 @@ pub fn timestamp(timestamp: Timestamp) -> Value {
 }
 
 pub fn date(date: Date) -> Value {
-  coerce_value(#(date.year, date.month, date.day))
+  let Date(year:, month:, day:) = date
+  let month = calendar.month_to_int(month)
+  coerce_value(#(year, month, day))
 }
 
 pub fn time(time: Time) -> Value {
@@ -773,9 +776,17 @@ pub fn timestamp_decoder() -> decode.Decoder(Timestamp) {
 
 pub fn date_decoder() -> decode.Decoder(Date) {
   use year <- decode.field(0, decode.int)
-  use month <- decode.field(1, decode.int)
+  use month <- decode.field(1, month_decoder())
   use day <- decode.field(2, decode.int)
   decode.success(Date(year:, month:, day:))
+}
+
+fn month_decoder() -> decode.Decoder(Month) {
+  use month <- decode.then(decode.int)
+  case calendar.month_from_int(month) {
+    Ok(month) -> decode.success(month)
+    Error(_) -> decode.failure(calendar.October, "Month")
+  }
 }
 
 pub fn time_decoder() -> decode.Decoder(Time) {
@@ -800,10 +811,6 @@ fn seconds_decoder() -> decode.Decoder(#(Int, Int)) {
     })
   }
   decode.one_of(int, [float])
-}
-
-pub type Date {
-  Date(year: Int, month: Int, day: Int)
 }
 
 pub type Time {

@@ -1,7 +1,7 @@
 import exception
 import gleam/dynamic/decode.{type Decoder}
 import gleam/option.{None, Some}
-import gleam/time/calendar
+import gleam/time/calendar.{Date, March, October, TimeOfDay}
 import gleam/time/timestamp
 import gleeunit
 import pog
@@ -161,7 +161,7 @@ pub fn selecting_rows_test() {
   assert returned.count == 1
   assert returned.rows
     == [
-      #(id, "neo", True, ["black"], timestamp, pog.Date(2020, 3, 4)),
+      #(id, "neo", True, ["black"], timestamp, Date(2020, March, 4)),
     ]
 
   pog.disconnect(db)
@@ -356,8 +356,8 @@ pub fn datetime_test() {
   start_default()
   |> assert_roundtrip(
     timestamp.from_calendar(
-      date: calendar.Date(day: 10, month: calendar.October, year: 2022),
-      time: calendar.TimeOfDay(11, 30, 30, 00),
+      date: Date(2022, October, 10),
+      time: TimeOfDay(11, 30, 30, 00),
       offset: calendar.utc_offset,
     ),
     "timestamp",
@@ -370,7 +370,7 @@ pub fn datetime_test() {
 pub fn date_test() {
   start_default()
   |> assert_roundtrip(
-    pog.Date(2022, 10, 11),
+    Date(2022, October, 11),
     "date",
     pog.date,
     pog.date_decoder(),
@@ -521,7 +521,7 @@ pub fn expected_maps_test() {
   assert returned.count == 1
   assert returned.rows
     == [
-      #(id, "neo", True, ["black"], timestamp, pog.Date(2020, 3, 4)),
+      #(id, "neo", True, ["black"], timestamp, Date(2020, March, 4)),
     ]
 
   pog.disconnect(db)
