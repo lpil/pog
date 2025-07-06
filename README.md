@@ -91,12 +91,13 @@ connection URI from the environment.
 
 ```gleam
 import envoy
+import gleam/erlang/process.{type Name}
 import pog
 
 /// Read the DATABASE_URL environment variable.
 /// Generate the pog.Config from that database URL.
 /// Finally, connect to database.
-pub fn read_connection_uri(name) -> Result(pog.Config, Nil) {
+pub fn read_connection_uri(name: Name(pog.Message)) -> Result(pog.Config, Nil) {
   use database_url <- result.try(envoy.get("DATABASE_URL"))
   pog.url_config(name, database_url)
 }
