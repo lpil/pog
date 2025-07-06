@@ -85,9 +85,7 @@ start(Config) ->
 query(Pool, Sql, Arguments, Timeout) ->
     Res = case Pool of
         {single_connection, Conn} ->
-            pgo_handler:extended_query(
-                Conn, Sql, Arguments, #{queue_time => undefined}
-            );
+            pgo_handler:extended_query(Conn, Sql, Arguments, #{});
         {pool, Name} ->
             Options = #{
                 pool => Name,
