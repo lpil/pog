@@ -35,15 +35,14 @@ pub fn start_application_supervisor(pool_name: process.Name(pog.Message)) {
 }
 ```
 
-Then in your application you can use a subject created from that name to make
-queries:
+Then in your application you can use a connection created from that name with
+the `pog.named_connection` to make queries:
 
 ```gleam
 import pog
 import gleam/dynamic/decode
-import gleam/erlang/process.{type Subject}
 
-pub fn run(db: Subject(pog.Message)) {
+pub fn run(db: pog.Connection) {
   // An SQL statement to run. It takes one int as a parameter
   let sql_query = "
   select
@@ -94,9 +93,8 @@ import envoy
 import gleam/erlang/process.{type Name}
 import pog
 
-/// Read the DATABASE_URL environment variable.
-/// Generate the pog.Config from that database URL.
-/// Finally, connect to database.
+/// Read the DATABASE_URL environment variable and then
+/// build the pog.Config from that database URL.
 pub fn read_connection_uri(name: Name(pog.Message)) -> Result(pog.Config, Nil) {
   use database_url <- result.try(envoy.get("DATABASE_URL"))
   pog.url_config(name, database_url)
