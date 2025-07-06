@@ -399,20 +399,7 @@ pub fn timestamp_decoder() -> decode.Decoder(Timestamp) {
 }
 
 pub fn calendar_date(date: Date) -> Value {
-  let month = case date.month {
-    calendar.January -> 1
-    calendar.February -> 2
-    calendar.March -> 3
-    calendar.April -> 4
-    calendar.May -> 5
-    calendar.June -> 6
-    calendar.July -> 7
-    calendar.August -> 8
-    calendar.September -> 9
-    calendar.October -> 10
-    calendar.November -> 11
-    calendar.December -> 12
-  }
+  let month = calendar.month_to_int(date.month)
   coerce_value(#(date.year, month, date.day))
 }
 
@@ -521,8 +508,8 @@ fn run_query(
 
 @external(erlang, "pog_ffi", "query_extended")
 fn run_query_extended(
-  a: SingleConnection,
-  b: String,
+  connection: SingleConnection,
+  query: String,
 ) -> Result(#(Int, List(Dynamic)), QueryError)
 
 pub type QueryError {
@@ -887,21 +874,9 @@ pub fn calendar_date_decoder() -> decode.Decoder(Date) {
   use year <- decode.field(0, decode.int)
   use month <- decode.field(1, decode.int)
   use day <- decode.field(2, decode.int)
-  let date = fn(month) { decode.success(calendar.Date(year:, month:, day:)) }
-  case month {
-    1 -> date(calendar.January)
-    2 -> date(calendar.February)
-    3 -> date(calendar.March)
-    4 -> date(calendar.April)
-    5 -> date(calendar.May)
-    6 -> date(calendar.June)
-    7 -> date(calendar.July)
-    8 -> date(calendar.August)
-    9 -> date(calendar.September)
-    10 -> date(calendar.October)
-    11 -> date(calendar.November)
-    12 -> date(calendar.December)
-    _ -> decode.failure(calendar.Date(0, calendar.January, 1), "Calendar date")
+  case calendar.month_from_int(month) {
+    Ok(month) -> decode.success(calendar.Date(year:, month:, day:))
+    Error(_) -> decode.failure(calendar.Date(0, calendar.January, 1), "Calendar date")
   }
 }
 
