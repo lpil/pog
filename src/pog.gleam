@@ -33,6 +33,15 @@ type SingleConnection
 
 pub type Message
 
+/// Create a reference to a pool using the pool's name.
+///
+/// If no pool has been started using this name then queries using this
+/// connection will fail.
+///
+pub fn named_connection(name: Name(Message)) -> Connection {
+  Pool(name)
+}
+
 /// The configuration for a pool of connections.
 pub type Config {
   Config(
@@ -335,6 +344,10 @@ pub fn start(config: Config) -> actor.StartResult(Connection) {
 fn start_tree(config: Config) -> Result(Pid, dynamic.Dynamic)
 
 /// Start a database connection pool by adding it to your supervision tree.
+///
+/// Use the `named_connection` function to create a connection to query this
+/// pool with if your supervisor does not pass back the return value of
+/// creating the pool.
 ///
 /// The pool is started in a new process and will asynchronously connect to the
 /// PostgreSQL instance specified in the config. If the configuration is invalid
