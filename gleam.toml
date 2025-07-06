@@ -1,6 +1,6 @@
 name = "pog"
 version = "3.3.0"
-gleam = ">= 1.11.0"
+gleam = ">= 1.4.0"
 licences = ["Apache-2.0"]
 description = "A PostgreSQL database client for Gleam, based on PGO"
 
@@ -23,6 +23,7 @@ gleam_time = ">= 1.2.0 and < 2.0.0"
 [dev-dependencies]
 gleeunit = ">= 1.0.0 and < 2.0.0"
 exception = ">= 2.0.0 and < 3.0.0"
+gleam_erlang = ">= 1.0.0 and < 2.0.0"
 
 [erlang]
 # Starting an SSL connection relies on ssl application to be started.
