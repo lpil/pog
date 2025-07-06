@@ -412,9 +412,9 @@ pub fn calendar_time_of_day(time: TimeOfDay) -> Value {
 @external(erlang, "pog_ffi", "coerce")
 fn coerce_value(a: anything) -> Value
 
-pub type TransactionError {
+pub type TransactionError(error) {
   TransactionQueryError(QueryError)
-  TransactionRolledBack(String)
+  TransactionRolledBack(error)
 }
 
 /// Runs a function within a PostgreSQL transaction.
@@ -425,8 +425,8 @@ pub type TransactionError {
 /// back.
 pub fn transaction(
   pool: Connection,
-  callback: fn(Connection) -> Result(t, String),
-) -> Result(t, TransactionError) {
+  callback: fn(Connection) -> Result(t, error),
+) -> Result(t, TransactionError(error)) {
   case pool {
     SingleConnection(conn) -> {
       transaction_layer(conn, callback)
@@ -448,8 +448,8 @@ pub fn transaction(
 
 fn transaction_layer(
   conn: SingleConnection,
-  callback: fn(Connection) -> Result(t, String),
-) -> Result(t, TransactionError) {
+  callback: fn(Connection) -> Result(t, error),
+) -> Result(t, TransactionError(error)) {
   let do = fn(conn, sql) {
     run_query_extended(conn, sql)
     |> result.map_error(TransactionQueryError)
