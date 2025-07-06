@@ -4,6 +4,7 @@ import gleam/erlang/process
 import gleam/option.{None, Some}
 import gleam/otp/actor
 import gleam/time/calendar
+import gleam/time/timestamp
 import gleeunit
 import pog
 
@@ -157,7 +158,7 @@ pub fn selecting_rows_test() {
       use x1 <- decode.field(1, decode.string)
       use x2 <- decode.field(2, decode.bool)
       use x3 <- decode.field(3, decode.list(decode.string))
-      use x4 <- decode.field(4, pog.calendar_datetime_decoder())
+      use x4 <- decode.field(4, pog.timestamp_decoder())
       use x5 <- decode.field(5, pog.calendar_date_decoder())
       decode.success(#(x0, x1, x2, x3, x4, x5))
     })
@@ -171,9 +172,10 @@ pub fn selecting_rows_test() {
         "neo",
         True,
         ["black"],
-        #(
+        timestamp.from_calendar(
           calendar.Date(2022, calendar.October, 10),
           calendar.TimeOfDay(11, 30, 30, 100_000_000),
+          calendar.utc_offset,
         ),
         calendar.Date(2020, calendar.March, 4),
       ),
@@ -509,7 +511,7 @@ pub fn expected_maps_test() {
       use colors <- decode.field("colors", decode.list(decode.string))
       use last_petted_at <- decode.field(
         "last_petted_at",
-        pog.calendar_datetime_decoder(),
+        pog.timestamp_decoder(),
       )
       use birthday <- decode.field("birthday", pog.calendar_date_decoder())
       decode.success(#(id, name, is_cute, colors, last_petted_at, birthday))
@@ -524,9 +526,10 @@ pub fn expected_maps_test() {
         "neo",
         True,
         ["black"],
-        #(
+        timestamp.from_calendar(
           calendar.Date(2022, calendar.October, 10),
           calendar.TimeOfDay(11, 30, 30, 0),
+          calendar.utc_offset,
         ),
         calendar.Date(2020, calendar.March, 4),
       ),

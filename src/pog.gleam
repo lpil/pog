@@ -18,6 +18,7 @@ import gleam/otp/supervision
 import gleam/result
 import gleam/string
 import gleam/time/calendar.{type Date, type TimeOfDay}
+import gleam/time/timestamp.{type Timestamp}
 import gleam/uri.{Uri}
 
 /// The port that will be used when none is specified.
@@ -371,8 +372,17 @@ pub fn array(converter: fn(a) -> Value, values: List(a)) -> Value {
   |> coerce_value
 }
 
-pub fn calendar_datetime(date: Date, time: TimeOfDay) -> Value {
-  coerce_value(#(calendar_date(date), calendar_time_of_day(time)))
+pub fn timestamp(timestamp: Timestamp) -> Value {
+  let #(seconds, nanoseconds) =
+    timestamp.to_unix_seconds_and_nanoseconds(timestamp)
+  coerce_value(seconds * 1_000_000 + nanoseconds / 1000)
+}
+
+pub fn timestamp_decoder() -> decode.Decoder(Timestamp) {
+  use microseconds <- decode.map(decode.int)
+  let seconds = microseconds / 1_000_000
+  let nanoseconds = { microseconds % 1_000_000 } * 1000
+  timestamp.from_unix_seconds_and_nanoseconds(seconds, nanoseconds)
 }
 
 pub fn calendar_date(date: Date) -> Value {
@@ -858,12 +868,6 @@ pub fn error_code_name(error_code: String) -> Result(String, Nil) {
     "XX002" -> Ok("index_corrupted")
     _ -> Error(Nil)
   }
-}
-
-pub fn calendar_datetime_decoder() -> decode.Decoder(#(Date, TimeOfDay)) {
-  use date <- decode.field(0, calendar_date_decoder())
-  use time <- decode.field(1, calendar_time_of_day_decoder())
-  decode.success(#(date, time))
 }
 
 pub fn calendar_date_decoder() -> decode.Decoder(Date) {
