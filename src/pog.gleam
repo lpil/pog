@@ -876,7 +876,8 @@ pub fn calendar_date_decoder() -> decode.Decoder(Date) {
   use day <- decode.field(2, decode.int)
   case calendar.month_from_int(month) {
     Ok(month) -> decode.success(calendar.Date(year:, month:, day:))
-    Error(_) -> decode.failure(calendar.Date(0, calendar.January, 1), "Calendar date")
+    Error(_) ->
+      decode.failure(calendar.Date(0, calendar.January, 1), "Calendar date")
   }
 }
 
