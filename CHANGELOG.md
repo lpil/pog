@@ -13,6 +13,8 @@
   transaction, while the pool can still be used to run queries outside the
   transaction.
 - The `gleam_time` package is now used for time types and functions.
+- The `TransactionError` type is now parameterised with an error type rather
+  being specific to strings.
 
 ## v3.3.0 - 2025-07-03
 
