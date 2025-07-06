@@ -2,14 +2,13 @@
 ////
 //// Gleam wrapper around pgo library
 
-// TODO: Connection is a union of the name and the checked out connection
-// TODO: Move handling of this into Gleam to make it easier to write
+// TODO: add time things with zone once pgo supports them
 
-// TODO: add time and timestamp with zone once pgo supports them
-
+import exception
 import gleam/dynamic.{type Dynamic}
 import gleam/dynamic/decode.{type Decoder}
-import gleam/erlang/process.{type Name, type Pid, type Subject}
+import gleam/erlang/process.{type Name, type Pid}
+import gleam/erlang/reference.{type Reference}
 import gleam/float
 import gleam/int
 import gleam/list
@@ -23,6 +22,13 @@ import gleam/uri.{Uri}
 
 /// The port that will be used when none is specified.
 const default_port: Int = 5432
+
+pub opaque type Connection {
+  Pool(Name(Message))
+  SingleConnection(SingleConnection)
+}
+
+type SingleConnection
 
 pub type Message
 
@@ -317,9 +323,9 @@ fn extract_ssl_mode(query: option.Option(String)) -> Result(Ssl, Nil) {
 /// or it cannot connect for another reason it will continue to attempt to
 /// connect, and any queries made using the connection pool will fail.
 ///
-pub fn start(config: Config) -> actor.StartResult(Subject(Message)) {
+pub fn start(config: Config) -> actor.StartResult(Connection) {
   case start_tree(config) {
-    Ok(pid) -> Ok(actor.Started(pid, process.named_subject(config.pool_name)))
+    Ok(pid) -> Ok(actor.Started(pid, Pool(config.pool_name)))
     Error(reason) -> Error(actor.InitExited(process.Abnormal(reason)))
   }
 }
@@ -334,9 +340,7 @@ fn start_tree(config: Config) -> Result(Pid, dynamic.Dynamic)
 /// or it cannot connect for another reason it will continue to attempt to
 /// connect, and any queries made using the connection pool will fail.
 ///
-pub fn supervised(
-  config: Config,
-) -> supervision.ChildSpecification(Subject(Message)) {
+pub fn supervised(config: Config) -> supervision.ChildSpecification(Connection) {
   supervision.supervisor(fn() { start(config) })
 }
 
@@ -410,15 +414,67 @@ pub type TransactionError {
 /// If the function returns an `Error` or panics then the transaction is rolled
 /// back.
 pub fn transaction(
-  pool: Subject(Message),
-  callback: fn(Subject(Message)) -> Result(t, String),
-) -> Result(t, TransactionError)
+  pool: Connection,
+  callback: fn(Connection) -> Result(t, String),
+) -> Result(t, TransactionError) {
+  case pool {
+    SingleConnection(conn) -> {
+      transaction_layer(conn, callback)
+    }
+    Pool(name) -> {
+      // Check out a single connection from the pool
+      use #(ref, conn) <- result.try(
+        checkout(name) |> result.map_error(TransactionQueryError),
+      )
 
-@external(erlang, "pog_ffi", "transaction")
-fn run_transaction(
+      // Make a best attempt to check back in the connection, even if this
+      // process crashes
+      use <- exception.defer(fn() { checkin(ref, conn) })
+
+      transaction_layer(conn, callback)
+    }
+  }
+}
+
+fn transaction_layer(
+  conn: SingleConnection,
+  callback: fn(Connection) -> Result(t, String),
+) -> Result(t, TransactionError) {
+  let do = fn(conn, sql) {
+    run_query_extended(conn, sql)
+    |> result.map_error(TransactionQueryError)
+  }
+
+  // Start a transaction with the single connection
+  use _ <- result.try(do(conn, "begin"))
+
+  // When the callback crashes we want to roll back the transaction
+  use <- exception.on_crash(fn() {
+    let assert Ok(_) = do(conn, "rollback") as "rollback exec failed"
+  })
+
+  case callback(SingleConnection(conn)) {
+    // The callback was OK, commit the transaction
+    Ok(t) -> {
+      use _ <- result.try(do(conn, "commit"))
+      Ok(t)
+    }
+
+    Error(error) -> {
+      // The callback failed, roll-back the transaction
+      use _ <- result.try(do(conn, "rollback"))
+      Error(TransactionRolledBack(error))
+    }
+  }
+}
+
+@external(erlang, "pog_ffi", "checkout")
+fn checkout(
   pool: Name(Message),
-  callback: fn(Subject(Message)) -> Result(t, String),
-) -> Result(t, TransactionError)
+) -> Result(#(Reference, SingleConnection), QueryError)
+
+@external(erlang, "pgo", "checkin")
+fn checkin(ref: Reference, conn: SingleConnection) -> Dynamic
 
 pub fn nullable(inner_type: fn(a) -> Value, value: Option(a)) -> Value {
   case value {
@@ -434,10 +490,16 @@ pub type Returned(t) {
 
 @external(erlang, "pog_ffi", "query")
 fn run_query(
-  a: Name(Message),
+  a: Connection,
   b: String,
   c: List(Value),
   timeout: Int,
+) -> Result(#(Int, List(Dynamic)), QueryError)
+
+@external(erlang, "pog_ffi", "query_extended")
+fn run_query_extended(
+  a: SingleConnection,
+  b: String,
 ) -> Result(#(Int, List(Dynamic)), QueryError)
 
 pub type QueryError {
@@ -509,13 +571,9 @@ pub fn timeout(query: Query(t1), timeout: Int) -> Query(t1) {
 ///
 pub fn execute(
   query query: Query(t),
-  on pool: Subject(Message),
+  on pool: Connection,
 ) -> Result(Returned(t), QueryError) {
   let parameters = list.reverse(query.parameters)
-  use pool <- result.try(
-    process.subject_name(pool)
-    |> result.replace_error(ConnectionUnavailable),
-  )
   use #(count, rows) <- result.try(run_query(
     pool,
     query.sql,

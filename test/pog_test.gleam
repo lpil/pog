@@ -15,7 +15,7 @@ fn disconnect(db: actor.Started(a)) -> Nil {
   process.send_exit(db.pid)
 }
 
-fn start_default() -> actor.Started(process.Subject(pog.Message)) {
+fn start_default() -> actor.Started(pog.Connection) {
   let assert Ok(started) =
     process.new_name("pog_test")
     |> default_config
