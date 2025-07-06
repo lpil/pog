@@ -1,6 +1,6 @@
 -module(pog_ffi).
 
--export([query/4, start/1, coerce/1, null/0, transaction/2]).
+-export([query/4, query_extended/2, start/1, coerce/1, null/0, checkout/1]).
 
 -include_lib("pog/include/pog_Config.hrl").
 -include_lib("pg_types/include/pg_types.hrl").
@@ -80,62 +80,40 @@ start(Config) ->
     end,
     pgo_pool:start_link(PoolName, Options2).
 
-old_transaction(Pool, Callback) when is_atom(Pool) ->
-    F = fun() ->
-        case Callback(Pool) of
-            {ok, T} -> {ok, T};
-            {error, Reason} -> error({pog_rollback_transaction, Reason})
-        end
+query(Pool, Sql, Arguments, Timeout) ->
+    Res = case Pool of
+        {single_connection, Conn} ->
+            pgo_handler:extended_query(
+                Conn, Sql, Arguments, #{queue_time => undefined}
+            );
+        {pool, Name} ->
+            Options = #{
+                pool => Name,
+                pool_options => [{timeout, Timeout}]
+            },
+            pgo:query(Sql, Arguments, Options)
     end,
-    try
-        pgo:transaction(Pool, F, #{})
-    catch
-        error:{pog_rollback_transaction, Reason} ->
-            {error, {transaction_rolled_back, Reason}}
-    end.
-
-
-transaction(Pool, Fun) when is_atom(Pool) andalso is_function(Fun, 1) ->
-    Exec = fun(Conn, Sql) ->
-        pgo_handler:extended_query(Conn, Sql, [], #{queue_time => undefined})
-    end,
-    case pgo:checkout(Pool) of
-        {ok, Ref, Conn} ->
-            try
-               #{command := 'begin'} = Exec(Conn, "BEGIN"),
-               Result = Fun(),
-               case Exec(Conn, "COMMIT") of
-                   #{command := commit} -> Result;
-                   #{command := rollback} -> Result
-               end
-            catch
-                Type:Reason:Stacktrace ->
-                Exec(Conn, "ROLLBACK"),
-                erlang:raise(Type, Reason, Stacktrace)
-            after
-                pgo:checkin(Ref, Conn)
-            end;
-        {error, _} = Error ->
-            Error
-    end;
-% TODO: remove
-transaction(A, B) ->
-    erlang:display(A),
-    erlang:display(B),
-    erlang:raise(badarg).
-
-query(Pool, Sql, Arguments, Timeout) when is_atom(Pool) ->
-    Options = #{
-        pool => Pool,
-        pool_options => [{timeout, Timeout}]
-    },
-    Res = pgo:query(Sql, Arguments, Options),
     case Res of
         #{rows := Rows, num_rows := NumRows} ->
             {ok, {NumRows, Rows}};
 
         {error, Error} ->
             {error, convert_error(Error)}
+    end.
+
+query_extended(Conn, Sql) ->
+    case pgo_handler:extended_query(Conn, Sql, [], #{queue_time => undefined}) of
+        #{rows := Rows, num_rows := NumRows} ->
+            {ok, {NumRows, Rows}};
+
+        {error, Error} ->
+            {error, convert_error(Error)}
+    end.
+
+checkout(Name) when is_atom(Name) ->
+    case pgo:checkout(Name) of
+        {ok, Ref, Conn} -> {ok, {Ref, Conn}};
+        {error, Error} -> {error, convert_error(Error)}
     end.
 
 convert_error(none_available) ->
