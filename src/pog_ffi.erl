@@ -37,6 +37,8 @@ default_ssl_options(Host, Ssl) ->
   end.
 
 start(Config) ->
+    % Unfortunately this has to be supplied via global mutable state currently.
+    application:set_env(pg_types, timestamp_config, integer_system_time_microseconds),
     #config{
         pool_name = PoolName,
         host = Host,

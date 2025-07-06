@@ -8,8 +8,11 @@
 - `connect` and `disconnect` have been removed in favour of `start` and `supervised`.
 - `url_config` and `default_config` now take a name parameter.
 - The `default_timeout` function has been removed.
-- TODO: more flexible transactions.
-- TODO: date functions changed.
+- The callback given to the `transaction` function now receives the connection
+  as an argument. Queries made using this connection will be in the
+  transaction, while the pool can still be used to run queries outside the
+  transaction.
+- The `gleam_time` package is now used for time types and functions.
 
 ## v3.3.0 - 2025-07-03
 
