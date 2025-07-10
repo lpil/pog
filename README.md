@@ -20,7 +20,7 @@ import pog
 
 pub fn start_application_supervisor(pool_name: process.Name(pog.Message)) {
   let pool_child = 
-    pog.defaut_config(pool_name)
+    pog.default_config(pool_name)
     |> pog.host("localhost")
     |> pog.database("my_database")
     |> pog.pool_size(15)
