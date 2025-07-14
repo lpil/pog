@@ -1,6 +1,6 @@
 # Changelog
 
-## v4.0.1 - 2025-07-14
+## v4.1.0 - 2025-07-14
 
 - Added a `numeric_decoder` to decode numeric types coming from postgres.
 
