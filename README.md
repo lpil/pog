@@ -4,6 +4,9 @@ A PostgreSQL database client for Gleam, based on [PGO][erlang-pgo].
 
 [erlang-pgo]: https://github.com/erleans/pgo
 
+[![Package Version](https://img.shields.io/hexpm/v/pog)](https://hex.pm/packages/pog)
+[![Hex Docs](https://img.shields.io/badge/hex-docs-ffaff3)](https://hexdocs.pm/pog/)
+
 ```gleam
 gleam add pog@4
 ```
