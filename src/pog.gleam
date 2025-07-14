@@ -904,3 +904,7 @@ fn seconds_decoder() -> decode.Decoder(#(Int, Int)) {
   }
   decode.one_of(int, [float])
 }
+
+pub fn numeric_decoder() -> decode.Decoder(Float) {
+  decode.one_of(decode.float, [decode.int |> decode.map(int.to_float)])
+}

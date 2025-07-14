@@ -333,6 +333,27 @@ pub fn float_test() {
   |> disconnect
 }
 
+pub fn numeric_test() {
+  let db =
+    start_default()
+    |> assert_roundtrip(0.0, "numeric", pog.float, pog.numeric_decoder())
+    |> assert_roundtrip(10.0, "numeric", pog.float, pog.numeric_decoder())
+    |> assert_roundtrip(1.1, "numeric", pog.float, pog.numeric_decoder())
+    |> assert_roundtrip(1.0, "numeric", pog.float, pog.numeric_decoder())
+
+  assert pog.query("select 1::numeric")
+    |> pog.returning(decode.at([0], pog.numeric_decoder()))
+    |> pog.execute(db.data)
+    == Ok(pog.Returned(count: 1, rows: [1.0]))
+
+  assert pog.query("select 0::numeric")
+    |> pog.returning(decode.at([0], pog.numeric_decoder()))
+    |> pog.execute(db.data)
+    == Ok(pog.Returned(count: 1, rows: [0.0]))
+
+  disconnect(db)
+}
+
 pub fn text_test() {
   start_default()
   |> assert_roundtrip("", "text", pog.text, decode.string)

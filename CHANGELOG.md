@@ -1,6 +1,10 @@
 # Changelog
 
-## v4.0.0 - Unreleased
+## Unreleased
+
+- Added a `numeric_decoder` to decode numeric types coming from postgres.
+
+## v4.0.0 - 2025-07-07
 
 - Starting a pool no longer generates an atom, instead a name is taken as an
   argument.
