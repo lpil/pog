@@ -184,6 +184,41 @@ pub fn selecting_rows_test() {
   disconnect(db)
 }
 
+pub fn selecting_values_test() {
+  let db = start_default()
+
+  let assert Ok(returned) =
+    pog.query(
+      "SELECT $1 AS selected_bool,
+        $2 AS selected_int,
+        $3 AS selected_float,
+        $4 AS selected_text,
+        $5 AS selected_calendar_date",
+    )
+    |> pog.parameter(pog.bool(True))
+    |> pog.parameter(pog.int(3))
+    |> pog.parameter(pog.float(3.0))
+    |> pog.parameter(pog.text("Hello Joe!"))
+    |> pog.parameter(pog.calendar_date(calendar.Date(2021, calendar.March, 13)))
+    |> pog.returning({
+      use x0 <- decode.field(0, decode.bool)
+      use x1 <- decode.field(1, decode.int)
+      use x2 <- decode.field(2, decode.float)
+      use x3 <- decode.field(3, decode.string)
+      use x4 <- decode.field(4, pog.calendar_date_decoder())
+      decode.success(#(x0, x1, x2, x3, x4))
+    })
+    |> pog.execute(db.data)
+
+  assert returned.count == 1
+  assert returned.rows
+    == [
+      #(True, 2, 3.0, "Hello Joe!", calendar.Date(2021, calendar.March, 13)),
+    ]
+
+  disconnect(db)
+}
+
 pub fn invalid_sql_test() {
   let db = start_default()
   let sql = "select       select"
