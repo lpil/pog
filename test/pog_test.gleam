@@ -189,7 +189,8 @@ pub fn selecting_values_test() {
 
   let assert Ok(returned) =
     pog.query(
-      "SELECT $1 AS selected_bool,
+      "SELECT
+        $1 AS selected_bool,
         $2 AS selected_int,
         $3 AS selected_float,
         $4 AS selected_text,
