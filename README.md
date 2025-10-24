@@ -18,7 +18,8 @@ Pools are named with a `Name` from `gleam/erlang/process`, so create one
 outside of your supervision tree and pass it down to the creation of the pool.
 
 ```gleam
-import gleam/otp/static_supervisor
+import gleam/otp/static_supervisor as supervisor
+import gleam/erlang/process
 import pog
 
 pub fn start_application_supervisor(pool_name: process.Name(pog.Message)) {
