@@ -184,7 +184,7 @@ pub fn selecting_rows_test() {
   disconnect(db)
 }
 
-pub fn selecting_bool_value() {
+pub fn selecting_bool_value_test() {
   let db = start_default()
 
   let assert Ok(returned) =
@@ -202,7 +202,7 @@ pub fn selecting_bool_value() {
   disconnect(db)
 }
 
-pub fn selecting_int_value() {
+pub fn selecting_int_value_test() {
   let db = start_default()
 
   let assert Ok(returned) =
@@ -220,7 +220,7 @@ pub fn selecting_int_value() {
   disconnect(db)
 }
 
-pub fn selecting_float_value() {
+pub fn selecting_float_value_test() {
   let db = start_default()
 
   let assert Ok(returned) =
@@ -238,7 +238,7 @@ pub fn selecting_float_value() {
   disconnect(db)
 }
 
-pub fn selecting_calendar_date_value() {
+pub fn selecting_calendar_date_value_test() {
   let db = start_default()
 
   let assert Ok(returned) =
