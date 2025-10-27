@@ -8,7 +8,6 @@ Initialize a Postgres Database, and use as environment variables:
 export PGUSER="postgres"
 export PGHOST="localhost"
 export PGPASSWORD="postgres"
-export PGUSER="postgres"
 export PGPORT=5432
 ```
 

@@ -432,6 +432,63 @@ pub fn nullable_test() {
   |> disconnect
 }
 
+pub fn range_of_timestamps_test() {
+  let encoder = pog.range(pog.timestamp, _)
+  let decoder = pog.range_decoder(pog.timestamp_decoder())
+  let assert Ok(timestamp) =
+    timestamp.parse_rfc3339("2025-10-09T12:34:56.123456Z")
+
+  start_default()
+  |> assert_roundtrip(pog.Empty, "tsrange", encoder, decoder)
+  |> assert_roundtrip(
+    pog.Range(pog.Unbound, pog.Unbound),
+    "tsrange",
+    encoder,
+    decoder,
+  )
+  |> assert_roundtrip(
+    pog.Range(
+      pog.Bound(timestamp, pog.Inclusive),
+      pog.Bound(timestamp, pog.Inclusive),
+    ),
+    "tsrange",
+    encoder,
+    decoder,
+  )
+  |> assert_roundtrip(
+    pog.Range(pog.Bound(timestamp, pog.Exclusive), pog.Unbound),
+    "tsrange",
+    encoder,
+    decoder,
+  )
+  |> assert_roundtrip(
+    pog.Range(pog.Unbound, pog.Bound(timestamp, pog.Inclusive)),
+    "tsrange",
+    encoder,
+    decoder,
+  )
+  |> disconnect
+}
+
+pub fn range_of_ints_test() {
+  let encoder = pog.range(pog.int, _)
+  let decoder = pog.range_decoder(decode.int)
+  start_default()
+  |> assert_roundtrip(
+    pog.Range(pog.Unbound, pog.Bound(10, pog.Exclusive)),
+    "int4range",
+    encoder,
+    decoder,
+  )
+  |> assert_roundtrip(
+    pog.Range(pog.Bound(0, pog.Inclusive), pog.Bound(10, pog.Exclusive)),
+    "int4range",
+    encoder,
+    decoder,
+  )
+  |> disconnect
+}
+
 pub fn expected_argument_type_test() {
   let db = start_default()
 

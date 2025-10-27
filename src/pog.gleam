@@ -7,6 +7,7 @@
 import exception
 import gleam/dynamic.{type Dynamic}
 import gleam/dynamic/decode.{type Decoder}
+import gleam/erlang/atom
 import gleam/erlang/process.{type Name, type Pid}
 import gleam/erlang/reference.{type Reference}
 import gleam/float
@@ -407,6 +408,41 @@ pub fn calendar_time_of_day(time: TimeOfDay) -> Value {
   let seconds = int.to_float(time.seconds)
   let seconds = seconds +. int.to_float(time.nanoseconds) /. 1_000_000_000.0
   coerce_value(#(time.hours, time.minutes, seconds))
+}
+
+pub fn range(converter: fn(a) -> Value, range: Range(a)) {
+  case range {
+    Range(lower, upper) -> {
+      case lower, upper {
+        Unbound, Unbound ->
+          coerce_value(#(#(Unbound, Unbound), #(False, False)))
+        Bound(value, inclusivity), Unbound ->
+          coerce_value(
+            #(#(converter(value), Unbound), #(
+              inclusivity_to_bool(inclusivity),
+              False,
+            )),
+          )
+        Unbound, Bound(value, inclusivity) ->
+          coerce_value(
+            #(#(Unbound, converter(value)), #(
+              False,
+              inclusivity_to_bool(inclusivity),
+            )),
+          )
+        Bound(lower_value, lower_inclusivity),
+          Bound(upper_value, upper_inclusivity)
+        ->
+          coerce_value(
+            #(#(converter(lower_value), converter(upper_value)), #(
+              inclusivity_to_bool(lower_inclusivity),
+              inclusivity_to_bool(upper_inclusivity),
+            )),
+          )
+      }
+    }
+    Empty -> coerce_value(Empty)
+  }
 }
 
 @external(erlang, "pog_ffi", "coerce")
@@ -910,4 +946,82 @@ fn seconds_decoder() -> decode.Decoder(#(Int, Int)) {
 ///
 pub fn numeric_decoder() -> decode.Decoder(Float) {
   decode.one_of(decode.float, [decode.int |> decode.map(int.to_float)])
+}
+
+pub type Range(t) {
+  Range(lower: Bound(t), upper: Bound(t))
+  Empty
+}
+
+pub type Bound(t) {
+  Bound(value: t, inclusivity: Inclusivity)
+  Unbound
+}
+
+pub type Inclusivity {
+  Inclusive
+  Exclusive
+}
+
+pub fn range_decoder(
+  value_decoder: decode.Decoder(t),
+) -> decode.Decoder(Range(t)) {
+  let range_decoder = {
+    use lower_inclusivity <- decode.subfield([1, 0], inclusivity_decoder())
+    use upper_inclusivity <- decode.subfield([1, 1], inclusivity_decoder())
+    use lower_bound <- decode.subfield(
+      [0, 0],
+      bound_decoder(value_decoder, lower_inclusivity),
+    )
+    use upper_bound <- decode.subfield(
+      [0, 1],
+      bound_decoder(value_decoder, upper_inclusivity),
+    )
+    decode.success(Range(lower_bound, upper_bound))
+  }
+
+  let empty_decoder = {
+    use decoded_atom <- decode.then(atom.decoder())
+    case decoded_atom == atom.create("empty") {
+      True -> decode.success(Empty)
+      False -> decode.failure(Empty, "empty")
+    }
+  }
+
+  decode.one_of(range_decoder, [empty_decoder])
+}
+
+fn bound_decoder(
+  value_decoder: decode.Decoder(t),
+  inclusivity: Inclusivity,
+) -> decode.Decoder(Bound(t)) {
+  let bound_decoder = {
+    use value <- decode.then(value_decoder)
+    decode.success(Bound(value:, inclusivity:))
+  }
+
+  let unbound_decoder = {
+    use decoded_atom <- decode.then(atom.decoder())
+    case decoded_atom == atom.create("unbound") {
+      True -> decode.success(Unbound)
+      False -> decode.failure(Unbound, "unbound")
+    }
+  }
+
+  decode.one_of(bound_decoder, [unbound_decoder])
+}
+
+fn inclusivity_decoder() -> decode.Decoder(Inclusivity) {
+  use decoded_bool <- decode.then(decode.bool)
+  case decoded_bool {
+    True -> decode.success(Inclusive)
+    False -> decode.success(Exclusive)
+  }
+}
+
+fn inclusivity_to_bool(inclusivity: Inclusivity) {
+  case inclusivity {
+    Inclusive -> True
+    Exclusive -> False
+  }
 }
