@@ -1,5 +1,7 @@
 import exception
+import gleam/dynamic
 import gleam/dynamic/decode.{type Decoder}
+import gleam/erlang/atom
 import gleam/erlang/process
 import gleam/option.{None, Some}
 import gleam/otp/actor
@@ -435,8 +437,10 @@ pub fn nullable_test() {
 pub fn range_of_timestamps_test() {
   let encoder = pog.range(pog.timestamp, _)
   let decoder = pog.range_decoder(pog.timestamp_decoder())
-  let assert Ok(timestamp) =
+  let assert Ok(lower_ts) =
     timestamp.parse_rfc3339("2025-10-09T12:34:56.123456Z")
+  let assert Ok(upper_ts) =
+    timestamp.parse_rfc3339("2025-11-04T11:11:11.111111Z")
 
   start_default()
   |> assert_roundtrip(pog.Empty, "tsrange", encoder, decoder)
@@ -448,22 +452,48 @@ pub fn range_of_timestamps_test() {
   )
   |> assert_roundtrip(
     pog.Range(
-      pog.Bound(timestamp, pog.Inclusive),
-      pog.Bound(timestamp, pog.Inclusive),
+      pog.Bound(lower_ts, pog.Inclusive),
+      pog.Bound(lower_ts, pog.Inclusive),
     ),
     "tsrange",
     encoder,
     decoder,
   )
   |> assert_roundtrip(
-    pog.Range(pog.Bound(timestamp, pog.Exclusive), pog.Unbound),
+    pog.Range(pog.Bound(lower_ts, pog.Exclusive), pog.Unbound),
     "tsrange",
     encoder,
     decoder,
   )
   |> assert_roundtrip(
-    pog.Range(pog.Unbound, pog.Bound(timestamp, pog.Inclusive)),
+    pog.Range(pog.Unbound, pog.Bound(upper_ts, pog.Inclusive)),
     "tsrange",
+    encoder,
+    decoder,
+  )
+  |> assert_roundtrip(
+    pog.Range(
+      pog.Bound(lower_ts, pog.Exclusive),
+      pog.Bound(upper_ts, pog.Inclusive),
+    ),
+    "tsrange",
+    encoder,
+    decoder,
+  )
+  |> disconnect
+}
+
+pub fn range_of_dates_test() {
+  let encoder = pog.range(pog.calendar_date, _)
+  let decoder = pog.range_decoder(pog.calendar_date_decoder())
+
+  start_default()
+  |> assert_roundtrip(
+    pog.Range(
+      pog.Bound(calendar.Date(2025, calendar.November, 4), pog.Inclusive),
+      pog.Bound(calendar.Date(2026, calendar.January, 1), pog.Exclusive),
+    ),
+    "daterange",
     encoder,
     decoder,
   )
@@ -473,20 +503,91 @@ pub fn range_of_timestamps_test() {
 pub fn range_of_ints_test() {
   let encoder = pog.range(pog.int, _)
   let decoder = pog.range_decoder(decode.int)
+
   start_default()
   |> assert_roundtrip(
-    pog.Range(pog.Unbound, pog.Bound(10, pog.Exclusive)),
+    pog.Range(pog.Bound(-123, pog.Inclusive), pog.Bound(333, pog.Exclusive)),
     "int4range",
     encoder,
     decoder,
   )
   |> assert_roundtrip(
-    pog.Range(pog.Bound(0, pog.Inclusive), pog.Bound(10, pog.Exclusive)),
-    "int4range",
+    pog.Range(
+      pog.Bound(-9_223_372_036_854_775_808, pog.Inclusive),
+      pog.Bound(9_223_372_036_854_775_807, pog.Exclusive),
+    ),
+    "int8range",
     encoder,
     decoder,
   )
   |> disconnect
+}
+
+pub fn range_of_numerics_test() {
+  let encoder = pog.range(pog.float, _)
+  let decoder = pog.range_decoder(pog.numeric_decoder())
+
+  start_default()
+  |> assert_roundtrip(
+    pog.Range(pog.Unbound, pog.Bound(1.23, pog.Exclusive)),
+    "numrange",
+    encoder,
+    decoder,
+  )
+  // this test doesn't work!
+  |> assert_roundtrip(
+    pog.Range(pog.Bound(1.23, pog.Exclusive), pog.Unbound),
+    "numrange",
+    encoder,
+    decoder,
+  )
+  // this test doesn't work!
+  |> assert_roundtrip(
+    pog.Range(pog.Bound(-3.14, pog.Exclusive), pog.Bound(3.14, pog.Inclusive)),
+    "numrange",
+    encoder,
+    decoder,
+  )
+  |> disconnect
+}
+
+pub fn range_decoder_test() {
+  assert Error([
+      decode.DecodeError(
+        "`#(#(t, t), #(bool, bool))` tuple or `empty` atom",
+        "Atom",
+        [],
+      ),
+    ])
+    == atom.create("invalid")
+    |> atom.to_dynamic()
+    |> decode.run(pog.range_decoder(decode.int))
+
+  assert Ok(pog.Empty)
+    == atom.create("empty")
+    |> atom.to_dynamic()
+    |> decode.run(pog.range_decoder(decode.int))
+
+  let numrange =
+    dynamic.array([
+      dynamic.array([dynamic.int(1), dynamic.float(3.14)]),
+      dynamic.array([dynamic.bool(False), dynamic.bool(True)]),
+    ])
+
+  assert Error([
+      decode.DecodeError(
+        "`#(#(t, t), #(bool, bool))` tuple or `empty` atom",
+        "Array",
+        [],
+      ),
+    ])
+    == decode.run(numrange, pog.range_decoder(decode.int))
+
+  assert Ok(pog.Range(
+      pog.Bound(1.0, pog.Exclusive),
+      pog.Bound(3.14, pog.Inclusive),
+    ))
+    == decode.run(numrange, pog.range_decoder(pog.numeric_decoder()))
 }
 
 pub fn expected_argument_type_test() {

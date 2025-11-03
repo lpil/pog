@@ -410,7 +410,7 @@ pub fn calendar_time_of_day(time: TimeOfDay) -> Value {
   coerce_value(#(time.hours, time.minutes, seconds))
 }
 
-pub fn range(converter: fn(a) -> Value, range: Range(a)) {
+pub fn range(converter: fn(a) -> Value, range: Range(a)) -> Value {
   case range {
     Range(lower, upper) -> {
       case lower, upper {
@@ -948,18 +948,45 @@ pub fn numeric_decoder() -> decode.Decoder(Float) {
   decode.one_of(decode.float, [decode.int |> decode.map(int.to_float)])
 }
 
+/// Generic representation of the PostgreSQL [Range Types](https://www.postgresql.org/docs/current/rangetypes.html)
 pub type Range(t) {
+  /// Every non-empty range has two bounds, the lower bound and the upper bound.
+  /// All points between these values are included in the range.
   Range(lower: Bound(t), upper: Bound(t))
+  /// The range includes no points
   Empty
 }
 
 pub type Bound(t) {
+  /// The lower (leftmost) or upper (rightmost) point of the [Range](#Range), i.e. the start or end of the range
   Bound(value: t, inclusivity: Inclusivity)
+  /// If the lower bound of a range is `Unbound`, then all values less than the upper bound are included in the range.
+  /// Likewise, if the upper bound of the range is `Unbound`, then all values greater than the lower bound are included in the range.
+  /// If both lower and upper bounds are `Unbound`, all values of the type `t` are considered to be in the range.
   Unbound
 }
 
+/// Indicates whether the boundary point of the lower or upper [Bound](#Bound) of a [Range](#Range)
+/// is included in the range of values.
+///
+/// > **Note**: PostgreSQL automatically normalizes ranges for discrete types (such as `int4range`, `int8range` or `daterange`)
+/// to use an inclusive lower bound and an exclusive upper bound.
+/// >
+/// > For example, inserting:
+/// > ```gleam
+/// > pog.Range(pog.Bound(0, pog.Exclusive), pog.Bound(10, pog.Inclusive))
+/// > ```
+/// > is stored as:
+/// > ```gleam
+/// > pog.Range(pog.Bound(1, pog.Inclusive), pog.Bound(11, pog.Exclusive))
+/// > ```
+/// > However, continuous range types (such as `numrange` and `tsrange`) are not normalized this way
+/// > — their bounds remain exactly as specified.
+///
 pub type Inclusivity {
+  /// The boundary point itself is included in the range
   Inclusive
+  /// The boundary point itself is **not** included in the range
   Exclusive
 }
 
@@ -984,11 +1011,12 @@ pub fn range_decoder(
     use decoded_atom <- decode.then(atom.decoder())
     case decoded_atom == atom.create("empty") {
       True -> decode.success(Empty)
-      False -> decode.failure(Empty, "empty")
+      False -> decode.failure(Empty, "`empty` atom")
     }
   }
 
   decode.one_of(range_decoder, [empty_decoder])
+  |> decode.collapse_errors("`#(#(t, t), #(bool, bool))` tuple or `empty` atom")
 }
 
 fn bound_decoder(
@@ -1004,7 +1032,7 @@ fn bound_decoder(
     use decoded_atom <- decode.then(atom.decoder())
     case decoded_atom == atom.create("unbound") {
       True -> decode.success(Unbound)
-      False -> decode.failure(Unbound, "unbound")
+      False -> decode.failure(Unbound, "`unbound` atom")
     }
   }
 
