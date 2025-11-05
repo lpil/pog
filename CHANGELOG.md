@@ -1,5 +1,10 @@
 # Changelog
 
+## v4.2.0 - TODO
+
+- Added `Range`, `Bound` and `Inclusivity` types to represent PostgreSQL range types
+- Added `range_decoder` and `range` functions to decode and encode ranges
+
 ## v4.1.0 - 2025-07-14
 
 - Added a `numeric_decoder` to decode numeric types coming from postgres.
