@@ -79,6 +79,63 @@ pub fn run(db: pog.Connection) {
 }
 ```
 
+## Query Interceptors
+
+Interceptors allow you to observe, log, or modify query execution. They're called before each query runs and can:
+
+- **Log queries** for debugging and auditing
+- **Collect metrics** for performance monitoring
+- **Return test data** for testing without a database
+
+### Example - Query Logging
+
+```gleam
+import gleam/io
+import pog
+
+let logger = pog.Interceptor(fn(request) {
+  io.println("SQL: " <> request.sql)
+  pog.Continue  // Execute normally
+})
+
+pog.default_config(pool_name)
+|> pog.interceptor(Some(logger))
+|> pog.start
+```
+
+### Example - Testing Without a Database
+
+```gleam
+import gleam/dynamic
+
+let test_data = dynamic.array([
+  dynamic.int(1),
+  dynamic.string("Alice"),
+  dynamic.string("alice@example.com"),
+])
+
+let test_interceptor = pog.Interceptor(fn(request) {
+  case request.sql {
+    "SELECT * FROM users WHERE id = $1" -> 
+      pog.Respond(count: 1, rows: [test_data])
+    _ -> 
+      pog.Continue
+  }
+})
+
+pog.default_config(pool_name)
+|> pog.interceptor(Some(test_interceptor))
+|> pog.start
+```
+
+### Interceptor Results
+
+Your interceptor function returns an `InterceptResult`:
+
+- `Continue` - Execute the query normally against the database
+- `Respond(count: Int, rows: List(Dynamic))` - Return this data without querying
+- `Fail(error: QueryError)` - Return this error without querying
+
 ## Support of connection URI
 
 Configuring a Postgres connection is done by using `Config` type in `pog`.

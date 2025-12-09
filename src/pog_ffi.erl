@@ -1,6 +1,6 @@
 -module(pog_ffi).
 
--export([query/4, query_extended/2, start/1, coerce/1, null/0, checkout/1]).
+-export([query/4, query_extended/2, start/1, coerce/1, null/0, checkout/1, get_pool_interceptor/1, set_pool_interceptor/2]).
 
 -include_lib("pog/include/pog_Config.hrl").
 -include_lib("pg_types/include/pg_types.hrl").
@@ -54,8 +54,14 @@ start(Config) ->
         idle_interval = IdleInterval,
         trace = Trace,
         ip_version = IpVersion,
-        rows_as_map = RowsAsMap
+        rows_as_map = RowsAsMap,
+        interceptor = Interceptor
     } = Config,
+    % Store interceptor if present
+    case Interceptor of
+        {some, I} -> set_pool_interceptor(PoolName, I);
+        none -> ok
+    end,
     {SslActivated, SslOptions} = default_ssl_options(Host, Ssl),
     Options1 = #{
         host => Host,
@@ -141,3 +147,24 @@ convert_error(#{
     {unexpected_argument_type, Expected, Got};
 convert_error(closed) ->
     query_timeout.
+
+%% Interceptor support
+%% Store interceptor in process dictionary keyed by pool name
+set_pool_interceptor(PoolName, Interceptor) when is_atom(PoolName) ->
+    put({pog_interceptor, PoolName}, Interceptor),
+    nil.
+
+%% Get interceptor for a connection
+get_pool_interceptor(Connection) ->
+    PoolName = case Connection of
+        {pool, Name} -> Name;
+        {single_connection, _} -> undefined
+    end,
+    case PoolName of
+        undefined -> none;
+        _ ->
+            case get({pog_interceptor, PoolName}) of
+                undefined -> none;
+                Interceptor -> {some, Interceptor}
+            end
+    end.

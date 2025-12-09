@@ -85,6 +85,8 @@ pub type Config {
     /// (default: False) By default, pgo will return a n-tuple, in the order of the query.
     /// By setting `rows_as_map` to `True`, the result will be `Dict`.
     rows_as_map: Bool,
+    /// (default: None): Optional query interceptor for logging, observability, or testing.
+    interceptor: Option(Interceptor),
   )
 }
 
@@ -210,6 +212,44 @@ pub fn rows_as_map(config: Config, rows_as_map: Bool) -> Config {
   Config(..config, rows_as_map:)
 }
 
+/// Set a query interceptor for logging, observability, or testing.
+///
+/// The interceptor is called before each query execution. Common use cases:
+///
+/// **Logging**: Log all SQL queries for debugging and auditing
+/// ```gleam
+/// import gleam/io
+/// 
+/// let logger = Interceptor(fn(req) {
+///   io.println("SQL: " <> req.sql)
+///   Continue
+/// })
+/// 
+/// config |> pog.interceptor(Some(logger))
+/// ```
+///
+/// **Metrics**: Track query performance
+/// ```gleam
+/// let metrics = Interceptor(fn(req) {
+///   metrics.record_query(req.sql, req.timeout)
+///   Continue
+/// })
+/// ```
+///
+/// **Testing**: Return test data without a database
+/// ```gleam
+/// let test_interceptor = Interceptor(fn(req) {
+///   case req.sql {
+///     "SELECT * FROM users" -> Respond(1, [test_user_data])
+///     _ -> Continue
+///   }
+/// })
+/// ```
+///
+pub fn interceptor(config: Config, interceptor: Option(Interceptor)) -> Config {
+  Config(..config, interceptor:)
+}
+
 /// The internet protocol version to use.
 pub type IpVersion {
   /// Internet Protocol version 4 (IPv4)
@@ -238,6 +278,7 @@ pub fn default_config(pool_name pool_name: Name(Message)) -> Config {
     trace: False,
     ip_version: Ipv4,
     rows_as_map: False,
+    interceptor: None,
   )
 }
 
@@ -498,6 +539,56 @@ pub type Returned(t) {
   Returned(count: Int, rows: List(t))
 }
 
+/// Query interceptor for logging, observability, and testing.
+///
+/// Interceptors are called before query execution and can:
+/// - Log queries for debugging and auditing
+/// - Collect metrics and performance data
+/// - Return mock data for testing (without a database)
+///
+/// The interceptor receives information about the query and can either
+/// continue with normal execution or provide an alternative result.
+///
+/// ## Example - Query logging
+///
+/// ```gleam
+/// import gleam/io
+/// 
+/// let logger = Interceptor(fn(request) {
+///   io.println("Executing: " <> request.sql)
+///   Continue
+/// })
+///
+/// pog.default_config(name)
+/// |> pog.interceptor(Some(logger))
+/// |> pog.start
+/// ```
+///
+pub type Interceptor {
+  Interceptor(intercept: fn(InterceptRequest) -> InterceptResult)
+}
+
+/// Information about a query being executed.
+///
+/// This is passed to the interceptor function before the query runs.
+pub type InterceptRequest {
+  InterceptRequest(sql: String, parameters: List(Value), timeout: Int)
+}
+
+/// The result returned by an interceptor.
+///
+/// - `Continue`: Execute the query normally against the database
+/// - `Respond`: Return this data instead of querying the database
+/// - `Fail`: Return this error instead of querying the database
+pub type InterceptResult {
+  /// Execute the query normally
+  Continue
+  /// Return data without querying the database
+  Respond(count: Int, rows: List(Dynamic))
+  /// Return an error without querying the database
+  Fail(error: QueryError)
+}
+
 @external(erlang, "pog_ffi", "query")
 fn run_query(
   a: Connection,
@@ -584,6 +675,29 @@ pub fn execute(
   on pool: Connection,
 ) -> Result(Returned(t), QueryError) {
   let parameters = list.reverse(query.parameters)
+  
+  // Check for interceptor
+  case get_pool_interceptor(pool) {
+    Some(interceptor) -> {
+      let request =
+        InterceptRequest(sql: query.sql, parameters: parameters, timeout: query.timeout)
+      
+      case interceptor.intercept(request) {
+        Continue -> execute_query(pool, query, parameters)
+        Respond(count:, rows:) ->
+          decode_intercepted_rows(count, rows, query.row_decoder)
+        Fail(error:) -> Error(error)
+      }
+    }
+    None -> execute_query(pool, query, parameters)
+  }
+}
+
+fn execute_query(
+  pool: Connection,
+  query: Query(t),
+  parameters: List(Value),
+) -> Result(Returned(t), QueryError) {
   use #(count, rows) <- result.try(run_query(
     pool,
     query.sql,
@@ -596,6 +710,21 @@ pub fn execute(
   )
   Ok(Returned(count, rows))
 }
+
+fn decode_intercepted_rows(
+  count: Int,
+  rows: List(Dynamic),
+  decoder: Decoder(t),
+) -> Result(Returned(t), QueryError) {
+  use decoded <- result.try(
+    list.try_map(over: rows, with: decode.run(_, decoder))
+    |> result.map_error(UnexpectedResultType),
+  )
+  Ok(Returned(count, decoded))
+}
+
+@external(erlang, "pog_ffi", "get_pool_interceptor")
+fn get_pool_interceptor(pool: Connection) -> Option(Interceptor)
 
 /// Get the name for a PostgreSQL error code.
 ///

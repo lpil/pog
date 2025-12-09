@@ -1,4 +1,5 @@
 import exception
+import gleam/dynamic
 import gleam/dynamic/decode.{type Decoder}
 import gleam/erlang/process
 import gleam/option.{None, Some}
@@ -614,4 +615,97 @@ pub fn transaction_commit_test() {
   let assert True = id2 == got2
 
   disconnect(db)
+}
+
+// Interceptor tests
+
+pub fn interceptor_logging_test() {
+  let interceptor =
+    pog.Interceptor(fn(request) {
+      let _ = request.sql
+      pog.Continue
+    })
+
+  let name = process.new_name("pog_test")
+  let config = pog.Config(..default_config(name), interceptor: Some(interceptor))
+
+  assert config.interceptor == Some(interceptor)
+}
+
+pub fn interceptor_respond_with_data_test() {
+  let test_data = dynamic.array([dynamic.int(42), dynamic.string("test")])
+  let interceptor = pog.Interceptor(fn(_request) { pog.Respond(1, [test_data]) })
+
+  let name = process.new_name("pog_test")
+  let config = pog.Config(..default_config(name), interceptor: Some(interceptor))
+  let assert Ok(started) = pog.start(config)
+
+  let decoder = {
+    use id <- decode.field(0, decode.int)
+    use name <- decode.field(1, decode.string)
+    decode.success(#(id, name))
+  }
+
+  let result =
+    pog.query("SELECT id, name FROM users")
+    |> pog.returning(decoder)
+    |> pog.execute(started.data)
+
+  assert result == Ok(pog.Returned(1, [#(42, "test")]))
+
+  disconnect(started)
+}
+
+pub fn interceptor_fail_with_error_test() {
+  let interceptor = pog.Interceptor(fn(_request) { pog.Fail(pog.ConnectionUnavailable) })
+  let name = process.new_name("pog_test")
+  let config = pog.Config(..default_config(name), interceptor: Some(interceptor))
+  let assert Ok(started) = pog.start(config)
+
+  let result =
+    pog.query("SELECT * FROM users")
+    |> pog.returning(decode.at([0], decode.int))
+    |> pog.execute(started.data)
+
+  assert result == Error(pog.ConnectionUnavailable)
+
+  disconnect(started)
+}
+
+pub fn no_interceptor_is_default_test() {
+  let name = process.new_name("pog_test")
+  let config = default_config(name)
+
+  assert config.interceptor == None
+}
+
+pub fn interceptor_can_inspect_sql_test() {
+  let interceptor =
+    pog.Interceptor(fn(request) {
+      case request.sql {
+        "SELECT 1" -> pog.Respond(1, [dynamic.array([dynamic.int(1)])])
+        "SELECT 2" -> pog.Respond(1, [dynamic.array([dynamic.int(2)])])
+        _ -> pog.Continue
+      }
+    })
+
+  let name = process.new_name("pog_test")
+  let config = pog.Config(..default_config(name), interceptor: Some(interceptor))
+  let assert Ok(started) = pog.start(config)
+
+  let result1 =
+    pog.query("SELECT 1")
+    |> pog.returning(decode.at([0], decode.int))
+    |> pog.execute(started.data)
+
+  assert result1 == Ok(pog.Returned(1, [1]))
+
+  let result2 =
+    pog.query("SELECT 2")
+    |> pog.returning(decode.at([0], decode.int))
+    |> pog.execute(started.data)
+
+  assert result2 == Ok(pog.Returned(1, [2]))
+
+  disconnect(started)
 }
