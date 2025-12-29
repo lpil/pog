@@ -615,3 +615,34 @@ pub fn transaction_commit_test() {
 
   disconnect(db)
 }
+
+pub fn notifications_test() {
+  let db = start_default()
+  let assert Ok(notifications) =
+    process.new_name("pog_test_notifications")
+    |> default_config
+    |> pog.start_notifications
+
+  let assert Ok(listener) = pog.listen(notifications.data, "the_channel")
+
+  let assert Ok(_) =
+    pog.query("NOTIFY the_channel, 'first payload'")
+    |> pog.execute(db.data)
+
+  let assert Ok(_) =
+    pog.notification_selector()
+    |> process.selector_receive(100)
+
+  pog.unlisten(notifications.data, listener)
+
+  let assert Ok(_) =
+    pog.query("NOTIFY the_channel, 'second payload'")
+    |> pog.execute(db.data)
+
+  let assert Error(Nil) =
+    pog.notification_selector()
+    |> process.selector_receive(10)
+
+  disconnect(db)
+  disconnect(notifications)
+}

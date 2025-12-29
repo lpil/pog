@@ -29,9 +29,17 @@ pub opaque type Connection {
   SingleConnection(SingleConnection)
 }
 
+pub opaque type NotificationsConnection {
+  NotificationsConnection(Name(Message))
+}
+
 type SingleConnection
 
 pub type Message
+
+pub type Notification {
+  Notify(pid: Pid, reference: Reference, channel: String, payload: String)
+}
 
 /// Create a reference to a pool using the pool's name.
 ///
@@ -40,6 +48,17 @@ pub type Message
 ///
 pub fn named_connection(name: Name(Message)) -> Connection {
   Pool(name)
+}
+
+/// Create a reference to a pool using the pool's name.
+///
+/// If no notifications process has been started using this name then
+/// listeners using this connection will fail.
+///
+pub fn named_notifications_connection(
+  name: Name(Message),
+) -> NotificationsConnection {
+  NotificationsConnection(name)
 }
 
 /// The configuration for a pool of connections.
@@ -343,6 +362,28 @@ pub fn start(config: Config) -> actor.StartResult(Connection) {
 @external(erlang, "pog_ffi", "start")
 fn start_tree(config: Config) -> Result(Pid, dynamic.Dynamic)
 
+/// Start a process holding a connection to the database that can be used to
+/// `LISTEN` to channels for notifications. Most the time you want to use
+/// `notifications_supervised` and add the process to your supervision tree
+/// instead of using this function directly.
+///
+/// The process will asynchronously connect to the PostgreSQL instance specified
+/// in the config. If the configuration is invalid or it cannot connect for
+/// another reason it will continue to attempt to connect, and any queries made
+/// using the connection pool will fail.
+///
+pub fn start_notifications(
+  config: Config,
+) -> actor.StartResult(NotificationsConnection) {
+  case start_tree_notifications(config) {
+    Ok(pid) -> Ok(actor.Started(pid, NotificationsConnection(config.pool_name)))
+    Error(reason) -> Error(actor.InitExited(process.Abnormal(reason)))
+  }
+}
+
+@external(erlang, "pog_ffi", "start_notifications")
+fn start_tree_notifications(config: Config) -> Result(Pid, dynamic.Dynamic)
+
 /// Start a database connection pool by adding it to your supervision tree.
 ///
 /// Use the `named_connection` function to create a connection to query this
@@ -356,6 +397,23 @@ fn start_tree(config: Config) -> Result(Pid, dynamic.Dynamic)
 ///
 pub fn supervised(config: Config) -> supervision.ChildSpecification(Connection) {
   supervision.supervisor(fn() { start(config) })
+}
+
+/// Start a database connection pool by adding it to your supervision tree.
+///
+/// Use the `named_connection` function to create a connection to query this
+/// pool with if your supervisor does not pass back the return value of
+/// creating the pool.
+///
+/// The pool is started in a new process and will asynchronously connect to the
+/// PostgreSQL instance specified in the config. If the configuration is invalid
+/// or it cannot connect for another reason it will continue to attempt to
+/// connect, and any queries made using the connection pool will fail.
+///
+pub fn notifications_supervised(
+  config: Config,
+) -> supervision.ChildSpecification(NotificationsConnection) {
+  supervision.supervisor(fn() { start_notifications(config) })
 }
 
 /// A value that can be sent to PostgreSQL as one of the arguments to a
@@ -511,6 +569,27 @@ fn run_query_extended(
   connection: SingleConnection,
   query: String,
 ) -> Result(#(Int, List(Dynamic)), QueryError)
+
+@external(erlang, "pog_ffi", "listen")
+pub fn listen(conn: NotificationsConnection, channel: String) -> Result(Reference, Nil)
+
+@external(erlang, "pog_ffi", "unlisten")
+pub fn unlisten(conn: NotificationsConnection, listener: Reference) -> Nil
+
+@external(erlang, "pog_ffi", "decode_notification")
+fn decode_notification(dyn: dynamic.Dynamic) -> Result(Notification, Nil)
+
+type Tag {
+  Notification
+}
+
+pub fn notification_selector() -> process.Selector(Notification) {
+  process.new_selector()
+  |> process.select_record(tag: Notification, fields: 4, mapping: fn(tuple) {
+    let assert Ok(result) = decode_notification(tuple)
+    result
+  })
+}
 
 pub type QueryError {
   /// The query failed as a database constraint would have been violated by the
