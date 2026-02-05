@@ -29,6 +29,10 @@ pub opaque type Connection {
   SingleConnection(SingleConnection)
 }
 
+/// A database connection used specifically for `LISTEN`/`NOTIFY` functionality.
+/// This is a long-lived connection in its own pool, and cannot be used for general
+/// database queries.
+///
 pub opaque type NotificationsConnection {
   NotificationsConnection(Name(Message))
 }
@@ -37,6 +41,12 @@ type SingleConnection
 
 pub type Message
 
+/// A notification received from the database in response to a `NOTIFY`.
+///
+/// Create a NotificationsConnection and use `listen` to issue PostgreSQL
+/// `LISTEN` commands to the database and receive these notifications
+/// using `select_notifications`.
+///
 pub type Notification {
   Notify(pid: Pid, reference: Reference, channel: String, payload: String)
 }
@@ -372,6 +382,11 @@ fn start_tree(config: Config) -> Result(Pid, dynamic.Dynamic)
 /// another reason it will continue to attempt to connect, and any queries made
 /// using the connection pool will fail.
 ///
+/// The `NotificationsConnection` is different from a regular connection, it is
+/// part of a new distinct connection pool, and cannot be used to make regular
+/// queries to the database. Processes which require both to receive notifications
+/// and to query the database must have both a `NotificationsConnection` and a
+/// regular `Connection`.
 pub fn start_notifications(
   config: Config,
 ) -> actor.StartResult(NotificationsConnection) {
@@ -570,24 +585,42 @@ fn run_query_extended(
   query: String,
 ) -> Result(#(Int, List(Dynamic)), QueryError)
 
+/// Subscribes the current process to a PostgreSQL `LISTEN`/`NOTIFY` channel by name.
+///
+/// Use `select_notifications` to start receiving the resulting notifications.
+///
+/// The returned reference can be used to later `unlisten` on this channel.
+///
 @external(erlang, "pog_ffi", "listen")
-pub fn listen(conn: NotificationsConnection, channel: String) -> Result(Reference, Nil)
+pub fn listen(
+  conn: NotificationsConnection,
+  channel: String,
+) -> Result(Reference, Nil)
 
+/// Remove a previously created listener by sending a corresponding `UNLISTEN`
+/// to the database.
+///
 @external(erlang, "pog_ffi", "unlisten")
 pub fn unlisten(conn: NotificationsConnection, listener: Reference) -> Nil
 
 @external(erlang, "pog_ffi", "decode_notification")
-fn decode_notification(dyn: dynamic.Dynamic) -> Result(Notification, Nil)
+fn decode_notification(dyn: dynamic.Dynamic) -> Notification
 
 type Tag {
   Notification
 }
 
-pub fn notification_selector() -> process.Selector(Notification) {
-  process.new_selector()
+/// Add a handler to a selector for `NOTIFY` events received from the database
+/// after calling `listen` for the corresponding channel.
+///
+pub fn select_notifications(
+  selector: process.Selector(payload),
+  transform: fn(Notification) -> payload,
+) -> process.Selector(payload) {
+  selector
   |> process.select_record(tag: Notification, fields: 4, mapping: fn(tuple) {
-    let assert Ok(result) = decode_notification(tuple)
-    result
+    let notification = decode_notification(tuple)
+    transform(notification)
   })
 }
 

@@ -1,6 +1,7 @@
 import exception
 import gleam/dynamic/decode.{type Decoder}
 import gleam/erlang/process
+import gleam/function
 import gleam/option.{None, Some}
 import gleam/otp/actor
 import gleam/time/calendar
@@ -630,7 +631,8 @@ pub fn notifications_test() {
     |> pog.execute(db.data)
 
   let assert Ok(_) =
-    pog.notification_selector()
+    process.new_selector()
+    |> pog.select_notifications(function.identity)
     |> process.selector_receive(100)
 
   pog.unlisten(notifications.data, listener)
@@ -640,9 +642,18 @@ pub fn notifications_test() {
     |> pog.execute(db.data)
 
   let assert Error(Nil) =
-    pog.notification_selector()
+    process.new_selector()
+    |> pog.select_notifications(function.identity)
     |> process.selector_receive(10)
 
   disconnect(db)
   disconnect(notifications)
+}
+
+pub fn notifications_no_process_fail() {
+  let notifications =
+    process.new_name("pog_test_notifications")
+    |> pog.named_notifications_connection()
+
+  let assert Error(Nil) = pog.listen(notifications, "the_channel")
 }
