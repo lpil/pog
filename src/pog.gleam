@@ -519,8 +519,8 @@ pub type QueryError {
   /// The query failed within the database.
   /// https://www.postgresql.org/docs/current/errcodes-appendix.html
   PostgresqlError(code: String, name: String, message: String)
-  // The number of arguments supplied did not match the number of parameters
-  // that the query has.
+  /// The number of arguments supplied did not match the number of parameters
+  /// that the query has.
   UnexpectedArgumentCount(expected: Int, got: Int)
   /// One of the arguments supplied was not of the type that the query required.
   UnexpectedArgumentType(expected: String, got: String)
