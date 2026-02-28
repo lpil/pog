@@ -126,7 +126,7 @@ that behaviour specifically for that one.
 ## Rows as maps
 
 By default, `pgo` will return every selected value from your query as a tuple.
-In case you want a different output, you can activate `rows_as_maps` in `Config`.
+In case you want a different output, you can activate `rows_as_map` in `Config`.
 Once activated, every returned rows will take the form of a `Dict`.
 
 ## SSL
