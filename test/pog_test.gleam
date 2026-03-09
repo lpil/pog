@@ -184,6 +184,78 @@ pub fn selecting_rows_test() {
   disconnect(db)
 }
 
+pub fn selecting_bool_value_test() {
+  let db = start_default()
+
+  let assert Ok(returned) =
+    pog.query("SELECT $1")
+    |> pog.parameter(pog.bool(True))
+    |> pog.returning({
+      use x0 <- decode.field(0, decode.bool)
+      decode.success(#(x0))
+    })
+    |> pog.execute(db.data)
+
+  assert returned.count == 1
+  assert returned.rows == [#(True)]
+
+  disconnect(db)
+}
+
+pub fn selecting_int_value_test() {
+  let db = start_default()
+
+  let assert Ok(returned) =
+    pog.query("SELECT $1")
+    |> pog.parameter(pog.int(42))
+    |> pog.returning({
+      use x0 <- decode.field(0, decode.int)
+      decode.success(#(x0))
+    })
+    |> pog.execute(db.data)
+
+  assert returned.count == 1
+  assert returned.rows == [#(42)]
+
+  disconnect(db)
+}
+
+pub fn selecting_float_value_test() {
+  let db = start_default()
+
+  let assert Ok(returned) =
+    pog.query("SELECT $1")
+    |> pog.parameter(pog.float(42.0))
+    |> pog.returning({
+      use x0 <- decode.field(0, decode.float)
+      decode.success(#(x0))
+    })
+    |> pog.execute(db.data)
+
+  assert returned.count == 1
+  assert returned.rows == [#(42.0)]
+
+  disconnect(db)
+}
+
+pub fn selecting_calendar_date_value_test() {
+  let db = start_default()
+
+  let assert Ok(returned) =
+    pog.query("SELECT $1")
+    |> pog.parameter(pog.calendar_date(calendar.Date(2021, calendar.March, 13)))
+    |> pog.returning({
+      use x0 <- decode.field(0, pog.calendar_date_decoder())
+      decode.success(#(x0))
+    })
+    |> pog.execute(db.data)
+
+  assert returned.count == 1
+  assert returned.rows == [#(calendar.Date(2021, calendar.March, 13))]
+
+  disconnect(db)
+}
+
 pub fn invalid_sql_test() {
   let db = start_default()
   let sql = "select       select"
