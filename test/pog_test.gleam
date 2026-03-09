@@ -515,12 +515,24 @@ pub fn expected_maps_test() {
     VALUES
       (DEFAULT, 'neo', true, ARRAY ['black'], '2022-10-10 11:30:30', '2020-03-04')
     RETURNING
-      id"
+      id, name"
 
   let assert Ok(pog.Returned(rows: [id], ..)) =
     pog.query(sql)
     |> pog.returning(decode.at(["id"], decode.int))
     |> pog.execute(db.data)
+
+  let assert Ok(pog.Returned(1, ["neo"])) =
+    pog.transaction(db.data, fn(conn) {
+      let assert Ok(returned) =
+        pog.query(sql)
+        |> pog.returning(decode.at(["name"], decode.string))
+        |> pog.execute(conn)
+
+      assert returned.rows == ["neo"]
+
+      Ok(returned)
+    })
 
   let assert Ok(returned) =
     pog.query("SELECT * FROM cats WHERE id = $1")

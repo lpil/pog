@@ -85,7 +85,8 @@ start(Config) ->
 query(Pool, Sql, Arguments, Timeout) ->
     Res = case Pool of
         {single_connection, Conn} ->
-            pgo_handler:extended_query(Conn, Sql, Arguments, #{});
+              DecodeOpts = element(11, Conn),
+              pgo_handler:extended_query(Conn, Sql, Arguments, DecodeOpts, #{});
         {pool, Name} ->
             Options = #{
                 pool => Name,
