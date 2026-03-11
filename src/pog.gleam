@@ -29,9 +29,27 @@ pub opaque type Connection {
   SingleConnection(SingleConnection)
 }
 
+/// A database connection used specifically for `LISTEN`/`NOTIFY` functionality.
+/// This is a long-lived connection in its own pool, and cannot be used for general
+/// database queries.
+///
+pub opaque type NotificationsConnection {
+  NotificationsConnection(Name(Message))
+}
+
 type SingleConnection
 
 pub type Message
+
+/// A notification received from the database in response to a `NOTIFY`.
+///
+/// Create a NotificationsConnection and use `listen` to issue PostgreSQL
+/// `LISTEN` commands to the database and receive these notifications
+/// using `select_notifications`.
+///
+pub type Notification {
+  Notify(pid: Pid, reference: Reference, channel: String, payload: String)
+}
 
 /// Create a reference to a pool using the pool's name.
 ///
@@ -40,6 +58,17 @@ pub type Message
 ///
 pub fn named_connection(name: Name(Message)) -> Connection {
   Pool(name)
+}
+
+/// Create a reference to a pool using the pool's name.
+///
+/// If no notifications process has been started using this name then
+/// listeners using this connection will fail.
+///
+pub fn named_notifications_connection(
+  name: Name(Message),
+) -> NotificationsConnection {
+  NotificationsConnection(name)
 }
 
 /// The configuration for a pool of connections.
@@ -343,6 +372,33 @@ pub fn start(config: Config) -> actor.StartResult(Connection) {
 @external(erlang, "pog_ffi", "start")
 fn start_tree(config: Config) -> Result(Pid, dynamic.Dynamic)
 
+/// Start a process holding a connection to the database that can be used to
+/// `LISTEN` to channels for notifications. Most the time you want to use
+/// `notifications_supervised` and add the process to your supervision tree
+/// instead of using this function directly.
+///
+/// The process will asynchronously connect to the PostgreSQL instance specified
+/// in the config. If the configuration is invalid or it cannot connect for
+/// another reason it will continue to attempt to connect, and any queries made
+/// using the connection pool will fail.
+///
+/// The `NotificationsConnection` is different from a regular connection, it is
+/// part of a new distinct connection pool, and cannot be used to make regular
+/// queries to the database. Processes which require both to receive notifications
+/// and to query the database must have both a `NotificationsConnection` and a
+/// regular `Connection`.
+pub fn start_notifications(
+  config: Config,
+) -> actor.StartResult(NotificationsConnection) {
+  case start_tree_notifications(config) {
+    Ok(pid) -> Ok(actor.Started(pid, NotificationsConnection(config.pool_name)))
+    Error(reason) -> Error(actor.InitExited(process.Abnormal(reason)))
+  }
+}
+
+@external(erlang, "pog_ffi", "start_notifications")
+fn start_tree_notifications(config: Config) -> Result(Pid, dynamic.Dynamic)
+
 /// Start a database connection pool by adding it to your supervision tree.
 ///
 /// Use the `named_connection` function to create a connection to query this
@@ -356,6 +412,23 @@ fn start_tree(config: Config) -> Result(Pid, dynamic.Dynamic)
 ///
 pub fn supervised(config: Config) -> supervision.ChildSpecification(Connection) {
   supervision.supervisor(fn() { start(config) })
+}
+
+/// Start a database connection pool by adding it to your supervision tree.
+///
+/// Use the `named_connection` function to create a connection to query this
+/// pool with if your supervisor does not pass back the return value of
+/// creating the pool.
+///
+/// The pool is started in a new process and will asynchronously connect to the
+/// PostgreSQL instance specified in the config. If the configuration is invalid
+/// or it cannot connect for another reason it will continue to attempt to
+/// connect, and any queries made using the connection pool will fail.
+///
+pub fn notifications_supervised(
+  config: Config,
+) -> supervision.ChildSpecification(NotificationsConnection) {
+  supervision.supervisor(fn() { start_notifications(config) })
 }
 
 /// A value that can be sent to PostgreSQL as one of the arguments to a
@@ -511,6 +584,45 @@ fn run_query_extended(
   connection: SingleConnection,
   query: String,
 ) -> Result(#(Int, List(Dynamic)), QueryError)
+
+/// Subscribes the current process to a PostgreSQL `LISTEN`/`NOTIFY` channel by name.
+///
+/// Use `select_notifications` to start receiving the resulting notifications.
+///
+/// The returned reference can be used to later `unlisten` on this channel.
+///
+@external(erlang, "pog_ffi", "listen")
+pub fn listen(
+  conn: NotificationsConnection,
+  channel: String,
+) -> Result(Reference, Nil)
+
+/// Remove a previously created listener by sending a corresponding `UNLISTEN`
+/// to the database.
+///
+@external(erlang, "pog_ffi", "unlisten")
+pub fn unlisten(conn: NotificationsConnection, listener: Reference) -> Nil
+
+@external(erlang, "pog_ffi", "decode_notification")
+fn decode_notification(dyn: dynamic.Dynamic) -> Notification
+
+type Tag {
+  Notification
+}
+
+/// Add a handler to a selector for `NOTIFY` events received from the database
+/// after calling `listen` for the corresponding channel.
+///
+pub fn select_notifications(
+  selector: process.Selector(payload),
+  transform: fn(Notification) -> payload,
+) -> process.Selector(payload) {
+  selector
+  |> process.select_record(tag: Notification, fields: 4, mapping: fn(tuple) {
+    let notification = decode_notification(tuple)
+    transform(notification)
+  })
+}
 
 pub type QueryError {
   /// The query failed as a database constraint would have been violated by the
