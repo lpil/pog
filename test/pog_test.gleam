@@ -615,3 +615,40 @@ pub fn transaction_commit_test() {
 
   disconnect(db)
 }
+
+pub fn transaction_checkout_timeout_test() {
+  // Start a pool with pool_size=1 and a very short checkout timeout
+  let assert Ok(db) =
+    process.new_name("pog_checkout_test")
+    |> default_config
+    |> pog.pool_size(1)
+    |> pog.checkout_timeout(50)
+    |> pog.start
+
+  // Hold the only connection by starting a transaction that blocks.
+  // In a separate process, try another transaction — it should fail
+  // with QueryTimeout because checkout_timeout is only 50ms and the
+  // only connection is held.
+  let parent = process.new_subject()
+  let _pid = process.spawn_unlinked(fn() {
+    // Sleep briefly to ensure the outer transaction starts first
+    process.sleep(20)
+    let result = pog.transaction(db.data, fn(tx) {
+      let _ = pog.query("SELECT 1") |> pog.execute(tx)
+      Ok(Nil)
+    })
+    process.send(parent, result)
+  })
+
+  // The outer transaction holds the connection for longer than 50ms
+  let _ = pog.transaction(db.data, fn(tx) {
+    let _ = pog.query("SELECT pg_sleep(0.2)") |> pog.execute(tx)
+    Ok(Nil)
+  })
+
+  // The spawned process should have received a timeout error
+  let assert Ok(inner_result) = process.receive(parent, 5000)
+  let assert Error(pog.TransactionQueryError(pog.QueryTimeout)) = inner_result
+
+  disconnect(db)
+}
