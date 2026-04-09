@@ -1,6 +1,6 @@
 -module(pog_ffi).
 
--export([query/4, query_extended/2, start/1, coerce/1, null/0, checkout/1]).
+-export([query/4, query_extended/2, start/1, coerce/1, null/0, checkout/2]).
 
 -include_lib("pog/include/pog_Config.hrl").
 -include_lib("pg_types/include/pg_types.hrl").
@@ -86,7 +86,7 @@ query(Pool, Sql, Arguments, Timeout) ->
     Res = case Pool of
         {single_connection, Conn} ->
             pgo_handler:extended_query(Conn, Sql, Arguments, #{});
-        {pool, Name} ->
+        {pool, Name, _CheckoutTimeout} ->
             Options = #{
                 pool => Name,
                 pool_options => [{timeout, Timeout}]
@@ -110,8 +110,8 @@ query_extended(Conn, Sql) ->
             {error, convert_error(Error)}
     end.
 
-checkout(Name) when is_atom(Name) ->
-    case pgo:checkout(Name) of
+checkout(Name, Timeout) when is_atom(Name) ->
+    case pgo:checkout(Name, [{timeout, Timeout}]) of
         {ok, Ref, Conn} -> {ok, {Ref, Conn}};
         {error, Error} -> {error, convert_error(Error)}
     end.
