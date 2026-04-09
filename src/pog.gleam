@@ -4,6 +4,8 @@
 
 // TODO: add time things with zone once pgo supports them
 
+const default_checkout_timeout = 5000
+
 import exception
 import gleam/dynamic.{type Dynamic}
 import gleam/dynamic/decode.{type Decoder}
@@ -39,7 +41,20 @@ pub type Message
 /// connection will fail.
 ///
 pub fn named_connection(name: Name(Message)) -> Connection {
-  Pool(name:, checkout_timeout: 5000)
+  Pool(name:, checkout_timeout: default_checkout_timeout)
+}
+
+/// Create a reference to a pool using the pool's name and an explicit
+/// checkout timeout in milliseconds.
+///
+/// Use this when the pool was started with a non-default `checkout_timeout`
+/// and you need transactions on this connection to use the same timeout.
+///
+pub fn named_connection_with_timeout(
+  name: Name(Message),
+  checkout_timeout timeout: Int,
+) -> Connection {
+  Pool(name:, checkout_timeout: timeout)
 }
 
 /// The configuration for a pool of connections.
@@ -248,7 +263,7 @@ pub fn default_config(pool_name pool_name: Name(Message)) -> Config {
     queue_target: 50,
     queue_interval: 1000,
     idle_interval: 1000,
-    checkout_timeout: 5000,
+    checkout_timeout: default_checkout_timeout,
     trace: False,
     ip_version: Ipv4,
     rows_as_map: False,
